@@ -1,0 +1,13 @@
+# 本地密钥，绝不提交（任意技能目录下的 mcp_config.json）
+mcp_config.json
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# DSH 沙箱诊断产物
+.acl-recovery/
+
+# 操作系统
+.DS_Store
+Thumbs.db
