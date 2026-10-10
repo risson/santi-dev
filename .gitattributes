@@ -1,0 +1,20 @@
+# Normalize text files to LF in the repository and in the working tree.
+# Prevents the "every line changed" diffs caused by mixed CRLF/LF content.
+* text=auto eol=lf
+
+# Explicit text types
+*.py    text
+*.js    text
+*.json  text
+*.md    text
+*.sh    text
+*.txt   text
+
+# Binary: never touch
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.pdf   binary
+*.zip   binary
+*.pyc   binary
