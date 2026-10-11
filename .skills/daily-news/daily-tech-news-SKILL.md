@@ -2,12 +2,13 @@
 name: daily-tech-news
 name_cn: 每日科技动态
 name_en: Daily Tech Dynamics
-version: 1.1.0
+version: 1.2.0
 description: >-
   每日科技动态简报生成器。执行前先体检数据源是否已安装，以 ifind-finance-data 为优先数据源、
   wind-mcp-skill 为兜底，扫描执行时刻前 24 小时的全球科技新闻，覆盖科技政策、重点新闻、
   产业动态、风险提示与今日关注，按产业分类并生成含产业链环节与产业化阶段判断的投资启示，
-  最终以纯 JSON 输出。输出位置在执行前确认：用户已指定则遵从，未指定则先询问打印到对话
+  最终以纯 JSON 输出，且每条新闻/事件条目均携带发布日期（date，YYYY-MM-DD）。
+  输出位置在执行前确认：用户已指定则遵从，未指定则先询问打印到对话
   还是写入文件目录。适用于科技产业投资、TMT 研究、新能源研究、高端制造研究。
 ---
 
@@ -177,9 +178,9 @@ Step 0.5: 输出目标决策（用户已指定则遵从；未指定则提问：�
 Step 1: 确定扫描窗口 = 执行当下往前推 24 小时（Asia/Shanghai）；例：当下 2026-10-10 14:00 → 窗口 [2026-10-09 14:00, 2026-10-10 14:00]。显式传入 date 时，以「指定日期当天的执行时刻」为终点往前推 24 小时
 Step 2: 创建临时工作目录（系统 temp，例如 /tmp/dsh-daily-tech-news/），写取数脚本
 Step 3: 按路由表并发取数（并发受限：免费 2 / 个人 5 / 企业 10；不确定按 2）
-Step 4: 新闻筛选与去重（按重要性排序，保留过去 24 小时内关键动态）
+Step 4: 新闻筛选与去重（按重要性排序，保留过去 24 小时内关键动态），并逐条提取、校验发布日期 `date`（取不到确切日期则剔除该条并记入 meta.degradations）
 Step 5: 按板块分类并生成投资启示（三要素：空间/结构/时间）与风险产业映射
-Step 6: schema 校验 + 输出前自检 → 按 Step 0.5 确定的目标输出（对话 / 文件目录）
+Step 6: schema 校验（含每条条目的 `date` 必填与格式）+ 输出前自检 → 按 Step 0.5 确定的目标输出（对话 / 文件目录）
 Step 7: 清理临时脚本（技能自身目录只读，不写入）
 ```
 
@@ -263,9 +264,11 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 - 高频/实时行情需求统一加载 `references/quotes.md`，其他类别只加载对应的参考文档，不整目录通读
 - 调用方式：优先 Node 方案（`call-node.js`，无额外依赖），Python 方案（`call.py`）备选
 - 返回结构：成功 `{ok: true, status_code, data}`；失败 `{ok: false, status_code, error, raw}`。`ok === false`、抛异常、超时（约 60s）、HTTP ≥ 400 均判定该路径失败
+- **条目日期提取**：从 `search_news` / `search_notice` / `search_trending_news` 的返回结果中提取每条新闻的发布/生效日期，作为该条目的 `date`（`YYYY-MM-DD`）；`time_start`/`time_end` 只是查询窗口参数，**不得**当作条目日期
 - **并发上限**：免费用户 2 请求/秒，个人版 5，企业版 10。不确定权益等级时**按免费版处理（并发 ≤ 2）**；必要时可询问用户或引导其到 MCP 官网查看权益
 - Windows PowerShell 管道执行含中文脚本前，先确保控制台输入输出编码为 UTF-8，避免中文 query 乱码
 - 临时请求脚本放在**技能目录之外**的临时目录，单次请求完成后清理
+- **P3 Web Search 日期要求**：条目必须能在检索结果中看到明确的发布日期，否则该条省略并把原因写入 `meta.degradations`，不得用检索当天的日期代替
 
 ---
 
@@ -387,6 +390,8 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 > 事件预告以 Web Search 为主，两家 MCP 均不覆盖事件日历。
 
+**日期要求**：`watchlist[]` 每条必须同时给出事件日期 `date`（`YYYY-MM-DD`，可跨日，须落在未来 24 小时内）与时刻 `time`（`HH:MM`）；跨日事件（如次日发布会）不得省略 `date`。日程未写明日期时，该条省略并记入 `meta.degradations`。
+
 **无数据处理**：若无重要事件，**该板块整体不出现在 JSON 中**。
 
 ---
@@ -475,7 +480,8 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 ```json
 {
   "category": "监管",
-  "description": "≤60字",
+  "date": "YYYY-MM-DD",
+  "summary": "≤60字",
   "source": "ifind-finance-data",
   "related": [
     {
@@ -530,6 +536,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
   "policy": [
     {
       "title": "政策名称/发布机构",
+      "date": "YYYY-MM-DD",
       "summary": "≤60字",
       "source": "ifind-finance-data",
       "insight": {
@@ -543,6 +550,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
   "headlines": [
     {
       "title": "≤40字",
+      "date": "YYYY-MM-DD",
       "summary": "≤80字",
       "source": "web_search",
       "insight": {
@@ -557,6 +565,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
     "semiconductor_ai_manufacturing": [
       {
         "summary": "≤60字",
+        "date": "YYYY-MM-DD",
         "source": "ifind-finance-data",
         "insight": {
           "direction": "利好",
@@ -572,6 +581,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
   "risks": [
     {
       "category": "监管",
+      "date": "YYYY-MM-DD",
       "summary": "≤60字",
       "source": "ifind-finance-data",
       "related": [
@@ -585,11 +595,31 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
     }
   ],
   "watchlist": [
-    { "time": "HH:MM", "event": "≤30字", "source": "web_search" }
+    { "date": "YYYY-MM-DD", "time": "HH:MM", "event": "≤30字", "source": "web_search" }
   ],
   "disclaimer": "数据来源：同花顺 iFinD、Wind 金融终端、公开信息 | AI 生成，仅供参考"
 }
 ```
+
+### 条目日期字段规范（`date`，强制）
+
+> **每一条目都必须带日期**，字段名 `date`，格式 `YYYY-MM-DD`（时区 Asia/Shanghai）。`date` 表示**该条新闻/事件自身的日期**，不是报告生成日（报告生成日由 `meta.date` 承载）。
+
+| 数组 | `date` 含义 | 取值来源 |
+|------|------------|---------|
+| `policy[]` | 政策发布/生效日期 | 被引 `source` 返回结果中的日期 |
+| `headlines[]` | 新闻发布日期 | 被引 `source` 返回结果中的日期 |
+| `industry.<sector>[]` | 产业动态发布日期 | 被引 `source` 返回结果中的日期 |
+| `risks[]` | 风险信息发布日期 | 被引 `source` 返回结果中的日期 |
+| `watchlist[]` | 事件发生日期（未来 24 小时内，可跨日） | 公告/日程中写明的事件日期 |
+
+**三条硬约束**：
+
+1. `date` 只能取返回结果中的时间戳或明确标注的发布日期，**不得推算、不得猜测**。
+2. 查询参数 `time_start` / `time_end` 与扫描窗口仅用于**筛选**，**不得**作为条目 `date`。
+3. 无法确定确切日期 → **该条不纳入输出**（无法证明其落在扫描窗口内），原因写入 `meta.degradations`（如 `{"dimension": "news.date_missing", "source": "ifind-finance-data", "reason": "返回结果无发布日期"}`）；**不得**填猜测值、空串或 `null`。
+
+**排序与去重**：同一数组内按 `date` 由新到旧排列（同日内保持重要性顺序）；同一新闻被多源命中去重时，`date` 取更早者（事件首发日期）。
 
 ### 输出规则
 
@@ -599,6 +629,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 4. 所有枚举字段（`direction` / `chain.level` / `chain.impact` / `stage`）必须取自「字段枚举」表
 5. 每条条目必须有 `source` 字段，取值为 `ifind-finance-data`、`wind-mcp-skill` 或 `web_search` 之一，且与实际调用一致
 6. `disclaimer` 必须存在
+7. 每条条目必须含 `date`：`policy[]` / `headlines[]` / `industry.<sector>[]` / `risks[]` 为其原始发布日期，`watchlist[]` 为事件日期；格式与取值规则见「条目日期字段规范（`date`）」，缺日期即视为校验不通过
 
 ---
 
@@ -624,7 +655,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 - `headlines` 最多输出 **3 条**，`summary` 不超过 **80 字**
 - `policy` 最多输出 **3 条**，`summary` 不超过 **60 字**
 - 每条 `insight` 的 `industry` + `chain.segment` 表述合计不超过 **50 字**
-- 每条 `risks[].description` 不超过 **60 字**，`related[].note` 不超过 **40 字**
+- 每条 `risks[].summary` 不超过 **60 字**，`related[].note` 不超过 **40 字**
 - `watchlist[].event` 不超过 **30 字**
 - **禁止**输出冗余背景介绍、过渡语句、重复说明
 
@@ -686,6 +717,7 @@ Web Search 失败:
 - [ ] 所有枚举值取自允许集合（`direction` / `chain.level` / `chain.impact` / `stage`）
 - [ ] 篇幅：满足「篇幅控制规范」的全部字数限额，正文控制在 2 页纸内（约 800-1000 字）
 - [ ] 所有条目均有 `source` 字段，且与实际调用的数据源一致
+- [ ] **条目日期**：每条条目（含 `watchlist`）均含 `date`，格式 `YYYY-MM-DD`，落在扫描窗口内（`watchlist` 为未来 24 小时事件日期）；未用查询窗口 `time_start`/`time_end` 充当条目日期；无确切发布日期的条目已剔除并记入 `meta.degradations`；同一数组内按 `date` 降序
 - [ ] 数据真实：所有内容均来自实际返回结果，无虚构内容
 - [ ] `disclaimer` 存在
 - [ ] **默认无定时任务、无自动推送**：用户未提及推送时未创建任何 schedule；用户要求设置推送时，已确认时间/内容/目标并如实报告创建结果（或如实说明环境不支持），未静默伪造
