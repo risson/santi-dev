@@ -2,11 +2,12 @@
 name: daily-tech-news
 name_cn: 每日科技动态
 name_en: Daily Tech Dynamics
-version: 1.2.0
+version: 1.3.0
 description: >-
   每日科技动态简报生成器。执行前先体检数据源是否已安装，以 ifind-finance-data 为优先数据源、
   wind-mcp-skill 为兜底，扫描执行时刻前 24 小时的全球科技新闻，覆盖科技政策、重点新闻、
-  产业动态、风险提示与今日关注，按产业分类并生成含产业链环节与产业化阶段判断的投资启示，
+  产业动态、风险提示与今日关注，所有新闻条目统一为同一结构、以与 title 同级的 type 字段
+  （policy / headline / industry / risk）区分类型，并生成含产业链环节与产业化阶段判断的投资启示，
   最终以纯 JSON 输出，且每条新闻/事件条目均携带发布日期（date，YYYY-MM-DD）。
   输出位置在执行前确认：用户已指定则遵从，未指定则先询问打印到对话
   还是写入文件目录。适用于科技产业投资、TMT 研究、新能源研究、高端制造研究。
@@ -156,7 +157,7 @@ B1–B4 全部通过 → `wind_available = true`。
 | 参数 | 说明 | 是否必需 | 默认值 |
 |------|------|----------|--------|
 | `date` | 指定日期（格式：YYYY-MM-DD），用于回溯历史数据；指定时扫描窗口终点取该日期当天的执行时刻 | 否 | 当前日期（时区 Asia/Shanghai） |
-| `focus_sectors` | 指定关注的产业，可多选 | 否 | 全部产业 |
+| `focus_sectors` | 指定关注的产业，可多选；仅收窄 `type: "industry"` 条目的取数范围，不影响输出结构 | 否 | 全部产业 |
 | `output_target` | 输出目标：`conversation`（对话）/ `file`（文件目录）；未提供时按「输出目标决策（Step 0.5）」询问 | 否 | 无默认，必须确认（见 Step 0.5） |
 
 ## 推送计划（默认不推送，可选每日定时推送）
@@ -178,9 +179,9 @@ Step 0.5: 输出目标决策（用户已指定则遵从；未指定则提问：�
 Step 1: 确定扫描窗口 = 执行当下往前推 24 小时（Asia/Shanghai）；例：当下 2026-10-10 14:00 → 窗口 [2026-10-09 14:00, 2026-10-10 14:00]。显式传入 date 时，以「指定日期当天的执行时刻」为终点往前推 24 小时
 Step 2: 创建临时工作目录（系统 temp，例如 /tmp/dsh-daily-tech-news/），写取数脚本
 Step 3: 按路由表并发取数（并发受限：免费 2 / 个人 5 / 企业 10；不确定按 2）
-Step 4: 新闻筛选与去重（按重要性排序，保留过去 24 小时内关键动态），并逐条提取、校验发布日期 `date`（取不到确切日期则剔除该条并记入 meta.degradations）
-Step 5: 按板块分类并生成投资启示（三要素：空间/结构/时间）与风险产业映射
-Step 6: schema 校验（含每条条目的 `date` 必填与格式）+ 输出前自检 → 按 Step 0.5 确定的目标输出（对话 / 文件目录）
+Step 4: 新闻筛选与去重（按重要性排序，保留过去 24 小时内关键动态），按 `type`（policy / headline / industry / risk）归类，并逐条提取、校验发布日期 `date`（取不到确切日期则剔除该条并记入 meta.degradations）
+Step 5: 为每条条目生成 `insights[]`（三要素：空间/结构/时间）与风险产业映射（一条风险可含多条 `insights`）
+Step 6: schema 校验（`type` 枚举、四类条目同构、`insights[]` 非空、每条条目的 `date` 必填与格式）+ 输出前自检 → 按 Step 0.5 确定的目标输出（对话 / 文件目录）
 Step 7: 清理临时脚本（技能自身目录只读，不写入）
 ```
 
@@ -272,7 +273,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 ---
 
-### 板块零：科技政策（优先获取，置于报告最前）
+### 板块零：科技政策（优先获取，输出时排在 `news[]` 最前）
 
 **要回答的问题**：过去 24 小时国内外有哪些重要科技政策、监管动态或产业扶持政策发布？
 
@@ -287,7 +288,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 | 3 | Wind | `financial_docs.get_financial_news` | `query`: "科技政策 产业扶持 监管新规 发布" |
 | 4 | Web Search | — | "过去 24 小时 国内 科技政策 产业扶持 监管新规" |
 
-**无数据处理**：若当天无重要科技政策动态，**该板块整体不出现在 JSON 中**。
+**无数据处理**：若当天无重要科技政策动态，**不产出 `type: "policy"` 的条目**。
 
 ---
 
@@ -304,7 +305,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 | 3 | Wind | `financial_docs.get_financial_news` | `query`: "全球科技 重大新闻 突破 发布" |
 | 4 | Web Search | — | "全球科技 过去 24 小时 重大新闻 突破 发布" |
 
-**无数据处理**：若无重要新闻，**该板块整体不出现在 JSON 中**。
+**无数据处理**：若无重要新闻，**不产出 `type: "headline"` 的条目**。
 
 ---
 
@@ -313,7 +314,9 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 覆盖三大核心科技产业，每个产业执行相同的三层加工流程：
 **新闻获取 → 摘要提炼 → 投资启示生成**。
 
-#### 产业一：半导体、AI 与大模型、高端制造（`semiconductor_ai_manufacturing`）
+> 以下三个覆盖范围**仅用于组织取数**，输出不再分组：所有产业动态条目并入 `news[]`，`type` 一律取 `"industry"`，所属产业由 `insights[].industry`（申万行业名）体现。
+
+#### 产业一：半导体、AI 与大模型、高端制造
 
 **核心关注点**：芯片制程突破、AI 大模型发布、人形机器人进展、商业航天发射、低空经济、资本开支计划。
 
@@ -325,11 +328,11 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 | 4 | Wind | `stock_data` 领域 NL 工具 | `question`: "中芯国际 华虹半导体 最新季度 资本开支 产能利用率" |
 | 5 | Wind | `analytics_data.get_financial_data` | 兜底：上述工具无法覆盖的结构化财务数据 |
 
-**无数据处理**：若当天无动态，**省略该产业子板块**。
+**无数据处理**：若当天无动态，**不产出对应条目**（对应覆盖范围无动态时不占 `news[]` 配额）。
 
 ---
 
-#### 产业二：新能源、生物医药（`new_energy_biopharma`）
+#### 产业二：新能源、生物医药
 
 **核心关注点**：光伏效率、锂电新技术、固态电池进展、储能、可控核聚变、脑机接口、上游材料价格、创新药审批、基因编辑技术、AI 制药合作。
 
@@ -342,11 +345,11 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 **智能跳过机制**：价格数据若非关键交易日（如周末），可降低查询频率。
 
-**无数据处理**：若当天无动态，**省略该产业子板块**。
+**无数据处理**：若当天无动态，**不产出对应条目**（对应覆盖范围无动态时不占 `news[]` 配额）。
 
 ---
 
-#### 产业三：海外巨头（`overseas_giants`）
+#### 产业三：海外巨头
 
 **核心关注点**：产品发布、财报指引、供应链调整。
 
@@ -358,7 +361,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 > 海外巨头动态以 Web Search 为主，两家 MCP 的 `news` / `financial_docs` 作为补充。
 
-**无数据处理**：若当天无动态，**省略该产业子板块**。
+**无数据处理**：若当天无动态，**不产出对应条目**（对应覆盖范围无动态时不占 `news[]` 配额）。
 
 ---
 
@@ -375,7 +378,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 **映射要求**：**每条风险都必须映射到相关产业与产业链环节**，使用与投资启示完全相同的结构（见「风险提示产业映射规范」）。
 
-**无数据处理**：若无明确风险信息，**该板块整体不出现在 JSON 中**。
+**无数据处理**：若无明确风险信息，**不产出 `type: "risk"` 的条目**。
 
 ---
 
@@ -392,7 +395,7 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 **日期要求**：`watchlist[]` 每条必须同时给出事件日期 `date`（`YYYY-MM-DD`，可跨日，须落在未来 24 小时内）与时刻 `time`（`HH:MM`）；跨日事件（如次日发布会）不得省略 `date`。日程未写明日期时，该条省略并记入 `meta.degradations`。
 
-**无数据处理**：若无重要事件，**该板块整体不出现在 JSON 中**。
+**无数据处理**：若无重要事件，**不产出 `watchlist` 条目**。
 
 ---
 
@@ -457,12 +460,15 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 ### 三要素整合输出格式
 
+三要素统一以 `insights[]` 数组承载（**每条新闻条目 ≥1 条**；`policy` / `headline` / `industry` 通常 1 条，`risk` 可多条以同时表达承压方与间接受益方）。数组元素结构：
+
 ```json
 {
   "direction": "利好",
   "industry": "电力设备",
   "chain": { "level": "上游材料", "segment": "固态电解质", "impact": "受益" },
-  "stage": "产业化拐点"
+  "stage": "产业化拐点",
+  "note": "≤40字（可选；risk 条目必填）"
 }
 ```
 
@@ -470,43 +476,58 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 - 基于新闻内容本身，结合相关产业链数据进行判断
 - 避免空泛表述，必须指向具体细分领域
 - 若信息不足无法判断，`stage` 取 `需进一步跟踪`，`chain` 三字段取 `待跟踪`
+- `risk` 条目每条的 `insights` 至少包含一个 `impact: "承压"` 的映射，并按「风险提示产业映射规范」补出可能的间接受益方
 
 ---
 
 ## 风险提示产业映射规范（本次核心）
 
-**每条风险都必须映射到相关产业与产业链环节**，使用与投资启示**完全相同的枚举与结构**。
+**每条风险都必须映射到相关产业与产业链环节**，使用与投资启示**完全相同的枚举与结构**：风险条目与其他三类条目字段集合一致（仅多一个可选 `category`），产业映射统一放在 `insights[]` 中（原风险条目的多映射数组并入 `insights[]`，原顶层 `stage` 下沉到每个 `insights[]` 元素）。
 
 ```json
 {
+  "type": "risk",
+  "title": "≤40字",
   "category": "监管",
   "date": "YYYY-MM-DD",
   "summary": "≤60字",
   "source": "ifind-finance-data",
-  "related": [
+  "insights": [
     {
+      "direction": "利空",
       "industry": "计算机",
       "chain": { "level": "应用/服务", "segment": "数据服务", "impact": "承压" },
+      "stage": "概念炒作",
+      "note": "≤40字"
+    },
+    {
+      "direction": "利好",
+      "industry": "计算机",
+      "chain": { "level": "上游设备", "segment": "数据安全", "impact": "受益" },
+      "stage": "产业化拐点",
       "note": "≤40字"
     }
-  ],
-  "stage": "概念炒作"
+  ]
 }
 ```
 
 ### 字段枚举（强制）
 
+> 下表约束 `insights[]` 内字段，以及 `type: "risk"` 的 `category`。
+
 | 字段 | 允许值 |
 |------|--------|
+| `direction` | `利好` \| `利空` \| `中性` \| `待跟踪` |
 | `industry` | 申万一级/二级行业名，如 电子、电力设备、计算机、机械设备、医药生物、国防军工 |
 | `chain.level` | `上游材料` \| `上游设备` \| `中游制造` \| `下游应用` \| `应用/服务` \| `跨界融合层` \| `待跟踪` |
 | `chain.segment` | 具体环节名，如 电解液/隔膜、正极材料、AI 服务器代工、柔性 OLED、UTG 玻璃；无法定位时取 `待跟踪` |
 | `chain.impact` | `受益` \| `承压` \| `中性` \| `待跟踪` |
 | `stage` | `概念炒作` \| `技术突破` \| `产业化拐点` \| `量产前夕` \| `需进一步跟踪` |
+| `category`（仅 `type: "risk"`，可选） | 推荐取值：`监管` \| `供应链` \| `技术` \| `需求` \| `地缘` \| `其他` |
 
 ### 映射规则
 
-1. 一条风险可映射**多个** `related`（同时给出受损方与间接受影响方）
+1. 一条风险可映射**多个** `insights`（同时给出受损方与间接受影响方）
 2. 必须同时给出**受损方**（`承压`）与可能的**间接受益方**（`受益`），避免单向叙事
 3. 风险传导路径沿「六大传导模式」推演，直接性优先，最多 2-3 层
 4. 无法定位到具体环节时，**不得写空泛表述**，改为三字段 `待跟踪` 并降低该条置信度
@@ -533,65 +554,75 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
       { "dimension": "edb", "source": "ifind-finance-data", "reason": "ok=false: 指标未命中" }
     ]
   },
-  "policy": [
+  "news": [
     {
+      "type": "policy",
       "title": "政策名称/发布机构",
       "date": "YYYY-MM-DD",
       "summary": "≤60字",
       "source": "ifind-finance-data",
-      "insight": {
-        "direction": "利好",
-        "industry": "电子",
-        "chain": { "level": "上游设备", "segment": "半导体设备", "impact": "受益" },
-        "stage": "产业化拐点"
-      }
-    }
-  ],
-  "headlines": [
-    {
-      "title": "≤40字",
-      "date": "YYYY-MM-DD",
-      "summary": "≤80字",
-      "source": "web_search",
-      "insight": {
-        "direction": "利好",
-        "industry": "电子",
-        "chain": { "level": "中游制造", "segment": "AI 服务器代工", "impact": "受益" },
-        "stage": "产业化拐点"
-      }
-    }
-  ],
-  "industry": {
-    "semiconductor_ai_manufacturing": [
-      {
-        "summary": "≤60字",
-        "date": "YYYY-MM-DD",
-        "source": "ifind-finance-data",
-        "insight": {
+      "insights": [
+        {
           "direction": "利好",
           "industry": "电子",
           "chain": { "level": "上游设备", "segment": "半导体设备", "impact": "受益" },
           "stage": "产业化拐点"
         }
-      }
-    ],
-    "new_energy_biopharma": [],
-    "overseas_giants": []
-  },
-  "risks": [
+      ]
+    },
     {
+      "type": "headline",
+      "title": "≤40字",
+      "date": "YYYY-MM-DD",
+      "summary": "≤80字",
+      "source": "web_search",
+      "insights": [
+        {
+          "direction": "利好",
+          "industry": "电子",
+          "chain": { "level": "中游制造", "segment": "AI 服务器代工", "impact": "受益" },
+          "stage": "产业化拐点"
+        }
+      ]
+    },
+    {
+      "type": "industry",
+      "title": "≤40字",
+      "date": "YYYY-MM-DD",
+      "summary": "≤60字",
+      "source": "ifind-finance-data",
+      "insights": [
+        {
+          "direction": "利好",
+          "industry": "电子",
+          "chain": { "level": "上游设备", "segment": "半导体设备", "impact": "受益" },
+          "stage": "产业化拐点"
+        }
+      ]
+    },
+    {
+      "type": "risk",
+      "title": "≤40字",
       "category": "监管",
       "date": "YYYY-MM-DD",
       "summary": "≤60字",
       "source": "ifind-finance-data",
-      "related": [
+      "insights": [
         {
+          "direction": "利空",
           "industry": "计算机",
           "chain": { "level": "应用/服务", "segment": "数据服务", "impact": "承压" },
+          "stage": "概念炒作",
+          "note": "≤40字"
+        },
+        {
+          "direction": "利好",
+          "industry": "计算机",
+          "chain": { "level": "上游设备", "segment": "数据安全", "impact": "受益" },
+          "stage": "产业化拐点",
           "note": "≤40字"
         }
-      ],
-      "stage": "概念炒作"
+      ]
     }
   ],
   "watchlist": [
@@ -601,16 +632,25 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 }
 ```
 
+### 结构要点
+
+1. **四类条目同构**：`news[]` 中每条均为 `type` + `title` + `date` + `summary` + `source` + `insights[]`；`category` 仅为 `type: "risk"` 的可选字段，其他类型不得出现。
+2. **`type` 取值**：`policy`（科技政策）/ `headline`（重点新闻）/ `industry`（产业动态）/ `risk`（风险提示），与 `title` 同级；四类条目混合在同一个 `news[]` 中，不再按板块分数组。
+3. **同名消歧**：`type: "industry"` 指"产业动态"这一类新闻；`insights[].industry` 仍是申万行业名，两者语义不同。
+4. **`insights[]` 至少 1 条**：承载 A 股映射（`direction` + `industry`）、产业链环节（`chain`）、产业化判断（`stage`）；`risk` 条目可多条，用 `impact: "承压"` / `"受益"` 同时表达受损方与间接受益方。
+5. **`news[]` 排序**：先按 `type` 优先级 `policy → headline → industry → risk`，同类内按 `date` 降序，保证科技政策置于最前。
+6. **去重**：同一事件只保留一条，`type` 取优先级更高者，`date` 取更早者（事件首发日期）。
+
 ### 条目日期字段规范（`date`，强制）
 
 > **每一条目都必须带日期**，字段名 `date`，格式 `YYYY-MM-DD`（时区 Asia/Shanghai）。`date` 表示**该条新闻/事件自身的日期**，不是报告生成日（报告生成日由 `meta.date` 承载）。
 
-| 数组 | `date` 含义 | 取值来源 |
+| 条目 | `date` 含义 | 取值来源 |
 |------|------------|---------|
-| `policy[]` | 政策发布/生效日期 | 被引 `source` 返回结果中的日期 |
-| `headlines[]` | 新闻发布日期 | 被引 `source` 返回结果中的日期 |
-| `industry.<sector>[]` | 产业动态发布日期 | 被引 `source` 返回结果中的日期 |
-| `risks[]` | 风险信息发布日期 | 被引 `source` 返回结果中的日期 |
+| `news[]`（`type: "policy"`） | 政策发布/生效日期 | 被引 `source` 返回结果中的日期 |
+| `news[]`（`type: "headline"`） | 新闻发布日期 | 被引 `source` 返回结果中的日期 |
+| `news[]`（`type: "industry"`） | 产业动态发布日期 | 被引 `source` 返回结果中的日期 |
+| `news[]`（`type: "risk"`） | 风险信息发布日期 | 被引 `source` 返回结果中的日期 |
 | `watchlist[]` | 事件发生日期（未来 24 小时内，可跨日） | 公告/日程中写明的事件日期 |
 
 **三条硬约束**：
@@ -619,30 +659,31 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 2. 查询参数 `time_start` / `time_end` 与扫描窗口仅用于**筛选**，**不得**作为条目 `date`。
 3. 无法确定确切日期 → **该条不纳入输出**（无法证明其落在扫描窗口内），原因写入 `meta.degradations`（如 `{"dimension": "news.date_missing", "source": "ifind-finance-data", "reason": "返回结果无发布日期"}`）；**不得**填猜测值、空串或 `null`。
 
-**排序与去重**：同一数组内按 `date` 由新到旧排列（同日内保持重要性顺序）；同一新闻被多源命中去重时，`date` 取更早者（事件首发日期）。
+**排序与去重**：`news[]` 先按 `type` 优先级 `policy → headline → industry → risk` 排列，同一 `type` 内按 `date` 由新到旧排列（同日内保持重要性顺序）；`watchlist[]` 按事件时间升序。同一新闻被多源命中去重时只保留一条，`type` 取优先级更高者，`date` 取更早者（事件首发日期）。
 
 ### 输出规则
 
 1. 只输出 JSON 本身；除 JSON 外不得有任何解释性文字（除非用户另外提问）
-2. **无数据的板块整体省略该键**，不输出 `null`，也不输出空数组占位（`industry` 的子键除外，见下）
-3. `industry` 子键（`semiconductor_ai_manufacturing` / `new_energy_biopharma` / `overseas_giants`）**保留键名**，无内容时取 `[]`
+2. **无数据的类型不产出条目**，不输出 `null` 或占位文字；`news` 数组为空时**整体省略该键**（不输出 `[]`），`watchlist` 同理
+3. `type` 必须取 `policy` / `headline` / `industry` / `risk` 之一，且与条目内容一致；四类条目字段集合完全一致（`type` + `title` + `date` + `summary` + `source` + `insights`），仅 `type: "risk"` 可多一个可选 `category`；每条条目必须有 `title`
 4. 所有枚举字段（`direction` / `chain.level` / `chain.impact` / `stage`）必须取自「字段枚举」表
 5. 每条条目必须有 `source` 字段，取值为 `ifind-finance-data`、`wind-mcp-skill` 或 `web_search` 之一，且与实际调用一致
 6. `disclaimer` 必须存在
-7. 每条条目必须含 `date`：`policy[]` / `headlines[]` / `industry.<sector>[]` / `risks[]` 为其原始发布日期，`watchlist[]` 为事件日期；格式与取值规则见「条目日期字段规范（`date`）」，缺日期即视为校验不通过
+7. 每条条目必须含 `date`：`news[]` 各条为其原始发布/生效日期，`watchlist[]` 为事件日期；格式与取值规则见「条目日期字段规范（`date`）」，缺日期即视为校验不通过
 
 ---
 
 ## 板块显示规则（核心逻辑）
 
-> **当天无信息的板块，一律不出现在 JSON 中，不输出任何占位文字（如"暂无动态"、"无相关信息"等）。**
+> **当天无信息的类型，一律不产出条目，不输出任何占位文字（如"暂无动态"、"无相关信息"等）。**
 
 | 板块 | 有数据时 | 无数据时 |
 |------|----------|----------|
-| `policy` | 正常输出数组 | **键完全省略** |
-| `headlines` | 正常输出数组 | **键完全省略** |
-| `industry` | 保留键，输出有数据的子键 | 子键取 `[]`；三个子键均空时保留键并全部取 `[]` |
-| `risks` | 正常输出数组 | **键完全省略** |
+| `news[]`（`type: "policy"`） | 输出对应条目 | 不产出该类型条目 |
+| `news[]`（`type: "headline"`） | 输出对应条目 | 不产出该类型条目 |
+| `news[]`（`type: "industry"`） | 输出对应条目 | 不产出该类型条目 |
+| `news[]`（`type: "risk"`） | 输出对应条目 | 不产出该类型条目 |
+| `news[]`（四类皆无） | — | **整体省略 `news` 键**（不输出 `[]`） |
 | `watchlist` | 正常输出数组 | **键完全省略** |
 
 ---
@@ -651,11 +692,12 @@ Step 7: 清理临时脚本（技能自身目录只读，不写入）
 
 > **文件篇幅不能过长，以下为强制压缩规则：**
 
-- `industry` 每个产业子板块最多输出 **1-2 条**，`summary` 不超过 **60 字**
-- `headlines` 最多输出 **3 条**，`summary` 不超过 **80 字**
-- `policy` 最多输出 **3 条**，`summary` 不超过 **60 字**
-- 每条 `insight` 的 `industry` + `chain.segment` 表述合计不超过 **50 字**
-- 每条 `risks[].summary` 不超过 **60 字**，`related[].note` 不超过 **40 字**
+- `type: "policy"` 最多输出 **3 条**，`summary` 不超过 **60 字**
+- `type: "headline"` 最多输出 **3 条**，`summary` 不超过 **80 字**
+- `type: "industry"` 最多输出 **6 条**（每个覆盖产业 1-2 条），`summary` 不超过 **60 字**
+- `type: "risk"` 最多输出 **5 条**，`summary` 不超过 **60 字**
+- 所有条目的 `title` 不超过 **40 字**
+- 每条 `insights[]` 元素的 `industry` + `chain.segment` 表述合计不超过 **50 字**，`note` 不超过 **40 字**
 - `watchlist[].event` 不超过 **30 字**
 - **禁止**输出冗余背景介绍、过渡语句、重复说明
 
@@ -710,14 +752,14 @@ Web Search 失败:
 - [ ] 输出是**单个合法 JSON 对象**，JSON 之外无任何文字
 - [ ] 全文**无 HTML 标签**、**无字体/颜色/行高规范**、**无 emoji**
 - [ ] `meta.degraded` 与 `meta.degradations` 与本次实际失败情况一致
-- [ ] 无数据板块已**整体省略该键**，未输出"暂无动态"类占位
-- [ ] `industry` 三个子键均存在，空子键为 `[]`
-- [ ] **投资启示三要素**：每条 `insight` 含 A 股映射（`industry` + `direction`）、产业链环节（`chain.level` + `chain.segment`）、产业化判断（`stage`）
-- [ ] **风险产业映射**：每条 `risks[].related` 均含 `industry` 与 `chain.{level,segment,impact}`，且不得为空泛表述
+- [ ] 无数据的类型未产出条目，未输出"暂无动态"类占位；`news` 整体为空时已**省略该键**（未输出 `[]`）
+- [ ] **条目同构**：`news[]` 每条含 `type` + `title` + `date` + `summary` + `source` + 非空 `insights[]`；`type` 为 `policy` / `headline` / `industry` / `risk` 之一，且与条目内容一致；`category` 仅出现在 `type: "risk"` 条目上
+- [ ] **投资启示三要素**：每条 `insights[]` 元素含 A 股映射（`industry` + `direction`）、产业链环节（`chain.level` + `chain.segment`）、产业化判断（`stage`）
+- [ ] **风险产业映射**：每条 `risk` 条目的 `insights[]` 均含 `industry`、`chain.{level,segment,impact}` 与 `note`，至少一条 `impact` 为 `承压`，且不得为空泛表述
 - [ ] 所有枚举值取自允许集合（`direction` / `chain.level` / `chain.impact` / `stage`）
 - [ ] 篇幅：满足「篇幅控制规范」的全部字数限额，正文控制在 2 页纸内（约 800-1000 字）
 - [ ] 所有条目均有 `source` 字段，且与实际调用的数据源一致
-- [ ] **条目日期**：每条条目（含 `watchlist`）均含 `date`，格式 `YYYY-MM-DD`，落在扫描窗口内（`watchlist` 为未来 24 小时事件日期）；未用查询窗口 `time_start`/`time_end` 充当条目日期；无确切发布日期的条目已剔除并记入 `meta.degradations`；同一数组内按 `date` 降序
+- [ ] **条目日期**：每条条目（含 `watchlist`）均含 `date`，格式 `YYYY-MM-DD`，落在扫描窗口内（`watchlist` 为未来 24 小时事件日期）；未用查询窗口 `time_start`/`time_end` 充当条目日期；无确切发布日期的条目已剔除并记入 `meta.degradations`；`news[]` 已按 `type` 优先级（policy → headline → industry → risk）排列，同一 `type` 内按 `date` 降序
 - [ ] 数据真实：所有内容均来自实际返回结果，无虚构内容
 - [ ] `disclaimer` 存在
 - [ ] **默认无定时任务、无自动推送**：用户未提及推送时未创建任何 schedule；用户要求设置推送时，已确认时间/内容/目标并如实报告创建结果（或如实说明环境不支持），未静默伪造
