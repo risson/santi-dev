@@ -1,0 +1,96 @@
+{
+  "_说明": "selftest 的期望值。改规则或改脚本后跑 `node scripts/screen.mjs selftest` 核验。",
+  "sample": {
+    "_fixture": "sample/event-chain-navigator_新型电池产业十五五规划_2026-09-28.json（附件原文，11 条）",
+    "_note": "该样本利好+高置信度只有 3 条：固态电解质材料 A/一级/高、高端电池制造装备 A/一级/高、储能与数据中心备电场景 A/二级/高",
+    "totalRaw": 11,
+    "keptCount": 3,
+    "dropped": 8,
+    "exclusionStats": {
+      "R1_LOW_CONFIDENCE": 1,
+      "D1_NOT_BULLISH": 2,
+      "D2_CONFIDENCE_NOT_HIGH": 5
+    },
+    "order": ["高端电池制造装备", "固态电解质材料", "储能与数据中心备电场景"],
+    "counts": [
+      { "最高": 0, "非常高": 0, "高": 1, "中高": 0, "中": 0, "中低": 0, "低": 0 },
+      { "最高": 0, "非常高": 0, "高": 1, "中高": 0, "中": 0, "中低": 0, "低": 0 },
+      { "最高": 0, "非常高": 0, "高": 0, "中高": 1, "中": 0, "中低": 0, "低": 0 }
+    ],
+    "dictNamesAfterSample": [
+      "储能与数据中心备电场景",
+      "固态电解质材料",
+      "高端电池制造装备"
+    ]
+  },
+  "aliasReuse": {
+    "_fixture": "alias-reuse/（储能 1 条 + 固态电解质/固态电池电解质 各 1 条 + 中置信度 1 条）",
+    "_note": "首轮由 canonical 增量归并并把别名沉淀进词典；次轮不再给 canonical，别名直接命中词典，计数求和",
+    "seedCanonical": {
+      "canonical": {
+        "固态电解质": "固态电解质材料",
+        "固态电池电解质": "固态电解质材料",
+        "储能与数据中心备电场景": "储能与数据中心备电场景"
+      }
+    },
+    "addedAliasesOnSeed": ["固态电池电解质", "固态电解质"],
+    "canonical": "固态电解质材料",
+    "counts": { "最高": 0, "非常高": 1, "高": 1, "中高": 0, "中": 0, "中低": 0, "低": 0 },
+    "aliases": ["固态电池电解质", "固态电解质"],
+    "fileCount": 1,
+    "sourceEntries": 2,
+    "order": ["储能与数据中心备电场景", "固态电解质材料"],
+    "addedCanonicals": [],
+    "confirmations": 3,
+    "dictAliases": ["固态电池电解质", "固态电解质"],
+    "dropped": 1,
+    "exclusionStats": { "D2_CONFIDENCE_NOT_HIGH": 1 }
+  },
+  "manualSeed": {
+    "canonical": {
+      "固态电池电解质": "固态电解质材料"
+    }
+  },
+  "conflictSeed": {
+    "canonical": {
+      "固态电池电解质": "固态电解质材料",
+      "固态电解质": "固态电解质材料"
+    }
+  },
+  "edgeCases": {
+    "_fixture": "edge-cases/（1 个正常文件含 5 条 + 1 个缺结构文件）",
+    "_note": "B/二级/中、利空 A/一级/高、D级、缺传导强度、中性 —— 保留 3 条且全为「低」档",
+    "totalRaw": 5,
+    "keptCount": 3,
+    "dropped": 2,
+    "exclusionStats": {
+      "R3_BEARISH_A_L1_HIGH": 1,
+      "D1_NOT_BULLISH": 1
+    },
+    "skippedReasons": ["E_MISSING_IMPACT_ARRAY"],
+    "requireWarnings": ["W_UNCLASSIFIED_ROW", "W_MISSING_FIELD"],
+    "order": ["钠离子电池材料", "缺强度方向", "未知定级方向"],
+    "counts": [
+      { "最高": 0, "非常高": 0, "高": 0, "中高": 0, "中": 0, "中低": 0, "低": 1 },
+      { "最高": 0, "非常高": 0, "高": 0, "中高": 0, "中": 0, "中低": 0, "低": 1 },
+      { "最高": 0, "非常高": 0, "高": 0, "中高": 0, "中": 0, "中低": 0, "低": 1 }
+    ]
+  },
+  "emptyResult": {
+    "_fixture": "empty-result/（影响环节为空数组）",
+    "totalRaw": 0
+  },
+  "duplicateFingerprint": {
+    "_fixture": "duplicate-fingerprint/（同方向同四轴出现两次）",
+    "totalRaw": 2,
+    "keptCount": 1,
+    "dropped": 0,
+    "order": ["重复方向"],
+    "counts": [{ "最高": 1, "非常高": 0, "高": 0, "中高": 0, "中": 0, "中低": 0, "低": 0 }]
+  },
+  "syntheticOrder": [
+    "非常高档方向:0,1,0,0,0,0,0",
+    "甲低档方向:0,0,0,0,1,0,0",
+    "丙低档方向:0,0,0,0,0,0,1"
+  ]
+}
