@@ -149,14 +149,14 @@ wind_probe:
 | 营收增速 | `stock_data.search_stocks`（排名条件内嵌） | `analytics_data.get_financial_data`（跨实体聚合，仅在专项工具无法覆盖时） |
 | 渗透率及趋势 | `financial_docs.get_financial_news` | `web_search`（券商研报口径） |
 | 预测 3-5 年市场规模 | `financial_docs.get_financial_news` | `web_search`（第三方机构测算） |
-| 龙头股代码（市值前 3） | `stock_data.search_stocks` | — |
+| 龙头股代码（最相关的里面选市值前 3） | `stock_data.search_stocks` | — |
 | 龙头股当前市值 | `stock_data.get_stock_price_indicators`（`indexes` 逐字取 wind-mcp-skill `references/stock-indicators.md`） | — |
 
 > 两处与"直觉写法"的差异（已在 references 注明）：① `financial_docs` **不含券商研报**，研报口径必须走 `web_search` 并标 `[待验证]`；② `stock_data` **无行业财务汇总工具**，行业级营收聚合走 `search_stocks` 或按契约降级到 `analytics_data`。
 
 ### 3.3 每次取数都要落证据
 
-每个数据点写清 `source.type`（`Wind 结构化数据`/`公司公告`/`Wind 新闻检索`/`券商研报`/`互联网查询`）、`source.year`、`confidence`（高/中/低）与一行 `confidence_basis`。**市值口径固定「总市值2」（含限售股）**，不得混用 `总市值1`，不得输出未声明口径的"总市值"。
+每个数据点写清 `source.type`（`Wind 结构化数据`/`公司公告`/`Wind 新闻检索`/`券商研报`/`互联网查询`）、`source.year`、`confidence`（高/中/低）与一行 `confidence_basis`。**龙头股必须是先选最相关的，然后再按总市值排序**。 **市值口径固定「总市值2」（含限售股）**，不得混用 `总市值1`，不得输出未声明口径的"总市值"。
 
 ### 3.4 失败与降级
 
