@@ -1,0 +1,1530 @@
+{
+  "_说明": "本文件是 santi-1-incremental-rank 的端到端样本。全部数字、机构名、股票市值均为【虚构的占位数据】，仅用于验证脚本的校验/淘汰/替换/换算/排序链路，不得作为任何真实结论引用。真实运行时由技能按 references/data-collection.md 取数后重新生成。",
+  "meta": {
+    "generated_at": "2026-10-13T10:00:00+08:00",
+    "数据来源": [
+      "wind-mcp-skill",
+      "web_search"
+    ],
+    "查询对象": {
+      "截至年度": "2025",
+      "预测窗口": "3-5年",
+      "汇率与单位说明": "USD→CNY 7.1200（Wind 最新汇率 2026-10-10）；统一折算为人民币亿元"
+    },
+    "降级说明": [
+      {
+        "dimension": "渗透率",
+        "source": "web_search",
+        "reason": "细分领域渗透率仅有第三方测算，标 [待验证]"
+      }
+    ]
+  },
+  "config": {
+    "top_n": 3,
+    "units": {
+      "market_size": [
+        {
+          "unit": "亿元",
+          "currency": "CNY"
+        },
+        {
+          "unit": "亿美元",
+          "currency": "USD"
+        }
+      ],
+      "forecast": [
+        {
+          "unit": "亿元",
+          "currency": "CNY"
+        },
+        {
+          "unit": "亿美元",
+          "currency": "USD"
+        }
+      ],
+      "company_mcap": [
+        {
+          "unit": "亿元",
+          "currency": "CNY"
+        }
+      ]
+    },
+    "fx": {
+      "usdcny": 7.12,
+      "source": "Wind 金融终端",
+      "as_of": "2026-10-10"
+    }
+  },
+  "细分方向": [
+    {
+      "细分产业方向": "固态电池制造装备",
+      "原名": [
+        "固态电池设备",
+        "全固态电池产线装备"
+      ],
+      "市场规模": {
+        "current": {
+          "value": "128.4",
+          "unit": "亿元",
+          "currency": "CNY",
+          "as_of": "2025",
+          "precision": "精确",
+          "caliber": "固态电池制造装备行业总产值",
+          "caliber_vs_target": null,
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "EDB 行业总产值指标",
+            "year": "2025"
+          },
+          "confidence": "高",
+          "confidence_basis": "Wind 结构化数据 + 口径一致 + 当年数据"
+        },
+        "history": [
+          {
+            "year": "2021",
+            "value": "42.0",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2022",
+            "value": "61.5",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2023",
+            "value": "86.2",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2024",
+            "value": "108.9",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          }
+        ],
+        "dual_query": {
+          "current": true,
+          "history": true,
+          "merged": true
+        }
+      },
+      "营收增速": {
+        "cagr_3y": 0.38,
+        "window": "2022-2024",
+        "series": [
+          {
+            "year": "2023",
+            "yoy": 0.4,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2024",
+            "yoy": 0.26,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          }
+        ],
+        "source": {
+          "type": "Wind 结构化数据",
+          "detail": "行业上市公司营收汇总",
+          "year": "2025"
+        },
+        "confidence": "中"
+      },
+      "渗透率": {
+        "current": 0.58,
+        "trend": "向上",
+        "space": "整体渗透率 58%，已进入替换主导区间",
+        "basis": "Wind 新闻：固态电池制造装备整体渗透率 58%，趋于饱和",
+        "source": {
+          "type": "Wind 新闻检索",
+          "detail": "行业新闻汇总",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "预测": {
+        "horizon": "3年",
+        "as_of_year": "2026",
+        "target_year": "2029",
+        "amount": {
+          "value": "520.0",
+          "unit": "亿元",
+          "currency": "CNY"
+        },
+        "caliber": "固态电池制造装备整体市场规模",
+        "caliber_vs_target": "精确",
+        "source": {
+          "type": "券商研报",
+          "detail": "某券商 2026 年固态电池设备深度报告",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "龙头股": [
+        {
+          "rank": 1,
+          "code": "300450.SZ",
+          "name": "先导智能",
+          "mcap": {
+            "value": "1024",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 2,
+          "code": "300207.SZ",
+          "name": "欣旺达",
+          "mcap": {
+            "value": "486",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 3,
+          "code": "688516.SH",
+          "name": "奥普特",
+          "mcap": {
+            "value": "312",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ],
+      "原方向数据快照": {
+        "_说明": "被替换的父方向口径数据，仅留痕不计入排序",
+        "市场规模": "128.4亿元（2025），渗透率 58.0%（向上）",
+        "替换理由": "父方向渗透率 58% ≥50% 命中首轮淘汰；候选「干法电极装备」渗透率 18% ≤30% 且趋势向上，要素齐备"
+      },
+      "备注": [
+        "市值口径=总市值2（含限售股）"
+      ],
+      "替换候选": {
+        "name": "干法电极装备",
+        "_说明": "替换候选：同行业内可比口径的更细分领域，自带完整要素；替换生效时本行全部要素取自此对象",
+        "市场规模": {
+          "current": {
+            "value": "52.6",
+            "unit": "亿元",
+            "currency": "CNY",
+            "as_of": "2025",
+            "precision": "精确",
+            "caliber": "干法电极装备细分领域市场规模",
+            "caliber_vs_target": null,
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "EDB 行业指标",
+              "year": "2025"
+            },
+            "confidence": "中",
+            "confidence_basis": "Wind 结构化数据 + 口径一致 + 当年数据"
+          },
+          "history": [
+            {
+              "year": "2021",
+              "value": "6.2",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            },
+            {
+              "year": "2022",
+              "value": "11.8",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            },
+            {
+              "year": "2023",
+              "value": "24.4",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            },
+            {
+              "year": "2024",
+              "value": "37.2",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            }
+          ],
+          "dual_query": {
+            "current": true,
+            "history": true,
+            "merged": true
+          }
+        },
+        "营收增速": {
+          "cagr_3y": 0.52,
+          "window": "2022-2024",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "细分领域上市公司营收汇总",
+            "year": "2025"
+          },
+          "confidence": "中"
+        },
+        "渗透率": {
+          "current": 0.18,
+          "trend": "向上",
+          "space": "干法电极装备在固态电池产线渗透率 18%，同比提升 6pct",
+          "basis": "干法电极装备在固态电池产线渗透率 18%，同比提升 6pct",
+          "source": {
+            "type": "互联网查询",
+            "detail": "GGII 2026 年测算",
+            "year": "2026"
+          },
+          "confidence": "中",
+          "tag": "[待验证]"
+        },
+        "预测": {
+          "horizon": "3年",
+          "as_of_year": "2026",
+          "target_year": "2029",
+          "amount": {
+            "value": "236.0",
+            "unit": "亿元",
+            "currency": "CNY"
+          },
+          "caliber": "干法电极装备市场规模",
+          "caliber_vs_target": "精确",
+          "source": {
+            "type": "券商研报",
+            "detail": "某券商 2026 年固态电池设备深度报告",
+            "year": "2026"
+          },
+          "confidence": "中",
+          "tag": "[待验证]"
+        },
+        "龙头股": [
+          {
+            "rank": 1,
+            "code": "300450.SZ",
+            "name": "先导智能",
+            "mcap": {
+              "value": "1024",
+              "unit": "亿元",
+              "currency": "CNY",
+              "index_field": "总市值2",
+              "as_of": "2026-10-10"
+            },
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          {
+            "rank": 2,
+            "code": "300207.SZ",
+            "name": "欣旺达",
+            "mcap": {
+              "value": "486",
+              "unit": "亿元",
+              "currency": "CNY",
+              "index_field": "总市值2",
+              "as_of": "2026-10-10"
+            },
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          {
+            "rank": 3,
+            "code": "688516.SH",
+            "name": "奥普特",
+            "mcap": {
+              "value": "312",
+              "unit": "亿元",
+              "currency": "CNY",
+              "index_field": "总市值2",
+              "as_of": "2026-10-10"
+            },
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators",
+              "year": "2026"
+            },
+            "confidence": "高"
+          }
+        ],
+        "备注": [
+          "候选口径为干法电极装备，替换后本行全部要素取自该口径"
+        ]
+      }
+    },
+    {
+      "细分产业方向": "固态电解质材料",
+      "原名": [
+        "固态电池电解质"
+      ],
+      "市场规模": {
+        "current": {
+          "value": "1689",
+          "unit": "亿美元",
+          "currency": "USD",
+          "as_of": "2025",
+          "precision": "近似",
+          "caliber": "全球固态电解质全产业链（含原材料+材料+配套服务）",
+          "caliber_vs_target": "偏大",
+          "caliber_note": "该口径覆盖原材料+材料+配套服务全产业链，远大于目标环节「固态电解质材料」口径，不能作为目标环节的精确值",
+          "source": {
+            "type": "互联网查询",
+            "detail": "QYResearch 2026 年全球固态电解质市场规模测算",
+            "year": "2026"
+          },
+          "confidence": "低",
+          "confidence_basis": "第三方机构测算 + 口径偏大 + 时效 1 年内，取最保守为低"
+        },
+        "history": [
+          {
+            "year": "2021",
+            "value": "620",
+            "unit": "亿美元",
+            "source": {
+              "type": "互联网查询",
+              "year": "2026"
+            },
+            "confidence": "低"
+          },
+          {
+            "year": "2022",
+            "value": "884",
+            "unit": "亿美元",
+            "source": {
+              "type": "互联网查询",
+              "year": "2026"
+            },
+            "confidence": "低"
+          },
+          {
+            "year": "2023",
+            "value": "1240",
+            "unit": "亿美元",
+            "source": {
+              "type": "互联网查询",
+              "year": "2026"
+            },
+            "confidence": "低"
+          },
+          {
+            "year": "2024",
+            "value": "1462",
+            "unit": "亿美元",
+            "source": {
+              "type": "互联网查询",
+              "year": "2026"
+            },
+            "confidence": "低"
+          }
+        ],
+        "dual_query": {
+          "current": true,
+          "history": true,
+          "merged": true
+        },
+        "deep_segment": null
+      },
+      "营收增速": {
+        "cagr_3y": 0.216,
+        "window": "2022-2024",
+        "series": [
+          {
+            "year": "2023",
+            "yoy": 0.4,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          },
+          {
+            "year": "2024",
+            "yoy": 0.18,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          }
+        ],
+        "source": {
+          "type": "Wind 结构化数据",
+          "detail": "固态电解质相关上市公司营收汇总",
+          "year": "2025"
+        },
+        "confidence": "中"
+      },
+      "渗透率": {
+        "current": 0.12,
+        "trend": "向上",
+        "space": "硫化物/氧化物电解质在动力电池中的渗透率仍低于 15%，2027 年后半固态放量带动提升",
+        "basis": "券商研报：2025 年固态电解质在动力电池渗透率约 12%，同比 +4pct",
+        "source": {
+          "type": "券商研报",
+          "detail": "某券商 2026 年固态电池材料深度报告",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "预测": {
+        "horizon": "3年",
+        "as_of_year": "2026",
+        "target_year": "2029",
+        "amount": {
+          "value": "2460",
+          "unit": "亿美元",
+          "currency": "USD"
+        },
+        "caliber": "全球固态电解质材料市场规模",
+        "caliber_vs_target": "偏大",
+        "source": {
+          "type": "互联网查询",
+          "detail": "QYResearch 2026 年测算（同口径延伸）",
+          "year": "2026"
+        },
+        "confidence": "低",
+        "tag": "[待验证]"
+      },
+      "龙头股": [
+        {
+          "rank": 1,
+          "code": "002812.SZ",
+          "name": "恩捷股份",
+          "mcap": {
+            "value": "986",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 2,
+          "code": "300073.SZ",
+          "name": "当升科技",
+          "mcap": {
+            "value": "418",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 3,
+          "code": "300037.SZ",
+          "name": "新宙邦",
+          "mcap": {
+            "value": "352",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ],
+      "备注": [
+        "市场规模与预测均为近似口径（偏大），留待精确口径复核 [待验证]"
+      ]
+    },
+    {
+      "细分产业方向": "储能与数据中心备电场景",
+      "原名": [
+        "储能备电",
+        "数据中心储能"
+      ],
+      "市场规模": {
+        "current": {
+          "value": "1846",
+          "unit": "亿元",
+          "currency": "CNY",
+          "as_of": "2025",
+          "precision": "精确",
+          "caliber": "储能与数据中心备电场景市场规模",
+          "caliber_vs_target": null,
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "EDB 行业市场规模指标",
+            "year": "2025"
+          },
+          "confidence": "高",
+          "confidence_basis": "Wind 结构化数据 + 口径一致 + 当年数据"
+        },
+        "history": [
+          {
+            "year": "2021",
+            "value": "720",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2022",
+            "value": "998",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2023",
+            "value": "1320",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2024",
+            "value": "1602",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          }
+        ],
+        "dual_query": {
+          "current": true,
+          "history": true,
+          "merged": true
+        }
+      },
+      "营收增速": {
+        "cagr_3y": 0.268,
+        "window": "2022-2024",
+        "series": [
+          {
+            "year": "2023",
+            "yoy": 0.32,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2024",
+            "yoy": 0.21,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          }
+        ],
+        "source": {
+          "type": "Wind 结构化数据",
+          "detail": "行业上市公司营收汇总",
+          "year": "2025"
+        },
+        "confidence": "中"
+      },
+      "渗透率": {
+        "current": 0.34,
+        "trend": "向上",
+        "space": "数据中心侧储能渗透率 34%，AI 算力扩张带动长时储能需求",
+        "basis": "Wind 新闻：数据中心储能渗透率约 34%，同比 +5pct",
+        "source": {
+          "type": "Wind 新闻检索",
+          "detail": "行业新闻汇总",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "预测": {
+        "horizon": "3年",
+        "as_of_year": "2026",
+        "target_year": "2029",
+        "amount": {
+          "value": "3820",
+          "unit": "亿元",
+          "currency": "CNY"
+        },
+        "caliber": "储能与数据中心备电场景市场规模",
+        "caliber_vs_target": "精确",
+        "source": {
+          "type": "券商研报",
+          "detail": "某券商 2026 年储能行业报告",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "龙头股": [
+        {
+          "rank": 1,
+          "code": "300750.SZ",
+          "name": "宁德时代",
+          "mcap": {
+            "value": "12840",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 2,
+          "code": "300014.SZ",
+          "name": "亿纬锂能",
+          "mcap": {
+            "value": "2280",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 3,
+          "code": "002074.SZ",
+          "name": "国轩高科",
+          "mcap": {
+            "value": "1024",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ],
+      "备注": []
+    },
+    {
+      "细分产业方向": "商业航天卫星数据中台",
+      "原名": [
+        "卫星数据中台与AI服务"
+      ],
+      "市场规模": {
+        "current": {
+          "value": "218",
+          "unit": "亿元",
+          "currency": "CNY",
+          "as_of": "2025",
+          "precision": "精确",
+          "caliber": "商业航天卫星数据中台与下游服务市场规模",
+          "caliber_vs_target": null,
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "EDB 行业指标",
+            "year": "2025"
+          },
+          "confidence": "高",
+          "confidence_basis": "Wind 结构化数据 + 口径一致 + 当年数据"
+        },
+        "history": [
+          {
+            "year": "2021",
+            "value": "62",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2022",
+            "value": "95",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2023",
+            "value": "142",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2024",
+            "value": "186",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          }
+        ],
+        "dual_query": {
+          "current": true,
+          "history": true,
+          "merged": true
+        },
+        "deep_segment": null
+      },
+      "营收增速": {
+        "cagr_3y": 0.44,
+        "window": "2022-2024",
+        "series": [
+          {
+            "year": "2023",
+            "yoy": 0.49,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          },
+          {
+            "year": "2024",
+            "yoy": 0.31,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          }
+        ],
+        "source": {
+          "type": "Wind 结构化数据",
+          "detail": "行业上市公司营收汇总",
+          "year": "2025"
+        },
+        "confidence": "中"
+      },
+      "渗透率": {
+        "current": 0.11,
+        "trend": "向上",
+        "space": "卫星数据商业化渗透率 11%，低空与遥感应用打开空间",
+        "basis": "Wind 新闻：卫星数据服务渗透率约 11%",
+        "source": {
+          "type": "Wind 新闻检索",
+          "detail": "行业新闻汇总",
+          "year": "2026"
+        },
+        "confidence": "低",
+        "tag": "[待验证]"
+      },
+      "预测": {
+        "horizon": "5年",
+        "as_of_year": "2026",
+        "target_year": "2031",
+        "amount": {
+          "value": "1120",
+          "unit": "亿元",
+          "currency": "CNY"
+        },
+        "caliber": "近似——全球太空算力口径（含硬件+软件+服务全产业链）",
+        "caliber_vs_target": "偏大",
+        "source": {
+          "type": "互联网查询",
+          "detail": "TrendForce 2026 年全球太空算力测算（口径远大于目标环节）",
+          "year": "2026"
+        },
+        "confidence": "低",
+        "tag": "[待验证]"
+      },
+      "龙头股": [
+        {
+          "rank": 1,
+          "code": "600118.SH",
+          "name": "中国卫星",
+          "mcap": {
+            "value": "486",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 2,
+          "code": "002465.SZ",
+          "name": "海格通信",
+          "mcap": {
+            "value": "318",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 3,
+          "code": "688568.SH",
+          "name": "中科星图",
+          "mcap": {
+            "value": "264",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ],
+      "备注": [
+        "预测为全球太空算力口径（偏大），不能作为目标环节精确值 [待验证]"
+      ]
+    },
+    {
+      "细分产业方向": "氢能燃料电池质子交换膜",
+      "原名": [
+        "氢燃料电池膜电极"
+      ],
+      "市场规模": {
+        "current": {
+          "value": "96",
+          "unit": "亿元",
+          "currency": "CNY",
+          "as_of": "2025",
+          "precision": "精确",
+          "caliber": "氢能燃料电池质子交换膜市场规模",
+          "caliber_vs_target": null,
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "EDB 行业指标",
+            "year": "2025"
+          },
+          "confidence": "高",
+          "confidence_basis": "Wind 结构化数据 + 口径一致 + 当年数据"
+        },
+        "history": [
+          {
+            "year": "2021",
+            "value": "38",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2022",
+            "value": "48",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2023",
+            "value": "68",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2024",
+            "value": "84",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          }
+        ],
+        "dual_query": {
+          "current": true,
+          "history": true,
+          "merged": true
+        }
+      },
+      "营收增速": {
+        "cagr_3y": 0.315,
+        "window": "2022-2024",
+        "series": [
+          {
+            "year": "2023",
+            "yoy": 0.42,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          },
+          {
+            "year": "2024",
+            "yoy": 0.24,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          }
+        ],
+        "source": {
+          "type": "Wind 结构化数据",
+          "detail": "行业上市公司营收汇总",
+          "year": "2025"
+        },
+        "confidence": "中"
+      },
+      "渗透率": {
+        "current": 0.41,
+        "trend": "向上",
+        "space": "质子交换膜国产化替代进行中，车用场景渗透率提升",
+        "basis": "Wind 新闻：燃料电池质子交换膜国产化渗透率约 41%",
+        "source": {
+          "type": "Wind 新闻检索",
+          "detail": "行业新闻汇总",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "预测": {
+        "horizon": "5年",
+        "as_of_year": "2026",
+        "target_year": "2031",
+        "amount": {
+          "value": "880",
+          "unit": "亿元",
+          "currency": "CNY"
+        },
+        "caliber": "质子交换膜及膜电极市场规模",
+        "caliber_vs_target": "精确",
+        "source": {
+          "type": "券商研报",
+          "detail": "某券商 2026 年氢能材料报告",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "龙头股": [
+        {
+          "rank": 1,
+          "code": "600481.SH",
+          "name": "双良节能",
+          "mcap": {
+            "value": "286",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 2,
+          "code": "002534.SZ",
+          "name": "杭锅股份",
+          "mcap": {
+            "value": "156",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "中"
+        },
+        {
+          "rank": 3,
+          "code": "300742.SZ",
+          "name": "越博动力",
+          "mcap": {
+            "value": "128",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "中"
+        }
+      ],
+      "备注": [
+        "渗透率 41% 处于 30%–50% 空白带，保留并观察趋势"
+      ]
+    },
+    {
+      "细分产业方向": "工业仿真软件CAE",
+      "原名": [
+        "CAE软件"
+      ],
+      "市场规模": {
+        "current": {
+          "value": "146",
+          "unit": "亿元",
+          "currency": "CNY",
+          "as_of": "2025",
+          "precision": "精确",
+          "caliber": "国内 CAE 软件市场规模",
+          "caliber_vs_target": null,
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "EDB 行业指标",
+            "year": "2025"
+          },
+          "confidence": "高",
+          "confidence_basis": "Wind 结构化数据 + 口径一致 + 当年数据"
+        },
+        "history": [
+          {
+            "year": "2021",
+            "value": "88",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2022",
+            "value": "104",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2023",
+            "value": "124",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          },
+          {
+            "year": "2024",
+            "value": "136",
+            "unit": "亿元",
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "高"
+          }
+        ],
+        "dual_query": {
+          "current": true,
+          "history": true,
+          "merged": true
+        }
+      },
+      "营收增速": {
+        "cagr_3y": 0.153,
+        "window": "2022-2024",
+        "series": [
+          {
+            "year": "2023",
+            "yoy": 0.19,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          },
+          {
+            "year": "2024",
+            "yoy": 0.1,
+            "source": {
+              "type": "Wind 结构化数据",
+              "year": "2025"
+            },
+            "confidence": "中"
+          }
+        ],
+        "source": {
+          "type": "Wind 结构化数据",
+          "detail": "行业上市公司营收汇总",
+          "year": "2025"
+        },
+        "confidence": "中"
+      },
+      "渗透率": {
+        "current": 0.63,
+        "trend": "稳定",
+        "space": "国内 CAE 软件在制造业研发环节渗透率 63%，增速趋缓",
+        "basis": "Wind 新闻：CAE 渗透率约 63%",
+        "source": {
+          "type": "Wind 新闻检索",
+          "detail": "行业新闻汇总",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "预测": {
+        "horizon": "3年",
+        "as_of_year": "2026",
+        "target_year": "2029",
+        "amount": {
+          "value": "230",
+          "unit": "亿元",
+          "currency": "CNY"
+        },
+        "caliber": "国内 CAE 软件市场规模",
+        "caliber_vs_target": "精确",
+        "source": {
+          "type": "券商研报",
+          "detail": "某券商 2026 年工业软件报告",
+          "year": "2026"
+        },
+        "confidence": "中",
+        "tag": "[待验证]"
+      },
+      "龙头股": [
+        {
+          "rank": 1,
+          "code": "688111.SH",
+          "name": "金山办公",
+          "mcap": {
+            "value": "1580",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "rank": 2,
+          "code": "688169.SH",
+          "name": "石头科技",
+          "mcap": {
+            "value": "486",
+            "unit": "亿元",
+            "currency": "CNY",
+            "index_field": "总市值2",
+            "as_of": "2026-10-10"
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "get_stock_price_indicators",
+            "year": "2026"
+          },
+          "confidence": "中"
+        }
+      ],
+      "备注": [
+        "渗透率 63% 已触发首轮淘汰；更细分领域「国产CAE替代」渗透率 28% 但趋势向下，未适用替换"
+      ],
+      "替换候选": {
+        "name": "国产CAE替代",
+        "_说明": "替换候选：同行业内可比口径的更细分领域，自带完整要素；替换生效时本行全部要素取自此对象",
+        "市场规模": {
+          "current": {
+            "value": "34.8",
+            "unit": "亿元",
+            "currency": "CNY",
+            "as_of": "2025",
+            "precision": "精确",
+            "caliber": "国产CAE替代细分领域市场规模",
+            "caliber_vs_target": null,
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "EDB 行业指标",
+              "year": "2025"
+            },
+            "confidence": "中",
+            "confidence_basis": "Wind 结构化数据 + 口径一致 + 当年数据"
+          },
+          "history": [
+            {
+              "year": "2021",
+              "value": "14.2",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            },
+            {
+              "year": "2022",
+              "value": "20.6",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            },
+            {
+              "year": "2023",
+              "value": "27.4",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            },
+            {
+              "year": "2024",
+              "value": "31.5",
+              "unit": "亿元",
+              "source": {
+                "type": "Wind 结构化数据",
+                "year": "2025"
+              },
+              "confidence": "中"
+            }
+          ],
+          "dual_query": {
+            "current": true,
+            "history": true,
+            "merged": true
+          }
+        },
+        "营收增速": {
+          "cagr_3y": 0.3,
+          "window": "2022-2024",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "细分领域上市公司营收汇总",
+            "year": "2025"
+          },
+          "confidence": "中"
+        },
+        "渗透率": {
+          "current": 0.28,
+          "trend": "向下",
+          "space": "国产 CAE 替代渗透率 28%，但第三方口径显示近两年趋势向下",
+          "basis": "国产 CAE 替代渗透率 28%，但第三方口径显示近两年趋势向下",
+          "source": {
+            "type": "互联网查询",
+            "detail": "GGII 2026 年测算",
+            "year": "2026"
+          },
+          "confidence": "中",
+          "tag": "[待验证]"
+        },
+        "预测": {
+          "horizon": "3年",
+          "as_of_year": "2026",
+          "target_year": "2029",
+          "amount": {
+            "value": "96.0",
+            "unit": "亿元",
+            "currency": "CNY"
+          },
+          "caliber": "国产CAE替代市场规模",
+          "caliber_vs_target": "精确",
+          "source": {
+            "type": "互联网查询",
+            "detail": "某第三方机构 2026 年测算",
+            "year": "2026"
+          },
+          "confidence": "中",
+          "tag": "[待验证]"
+        },
+        "龙头股": [
+          {
+            "rank": 1,
+            "code": "688111.SH",
+            "name": "金山办公",
+            "mcap": {
+              "value": "1580",
+              "unit": "亿元",
+              "currency": "CNY",
+              "index_field": "总市值2",
+              "as_of": "2026-10-10"
+            },
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          {
+            "rank": 2,
+            "code": "688169.SH",
+            "name": "石头科技",
+            "mcap": {
+              "value": "486",
+              "unit": "亿元",
+              "currency": "CNY",
+              "index_field": "总市值2",
+              "as_of": "2026-10-10"
+            },
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators",
+              "year": "2026"
+            },
+            "confidence": "高"
+          }
+        ],
+        "备注": [
+          "候选趋势向下，不满足替换条件"
+        ]
+      }
+    }
+  ],
+  "已失效条目": [
+    {
+      "细分产业方向": "量子加密通信设备",
+      "reason": "Wind 未返回可用市值与规模数据，web_search 亦无有效来源，按 [数据暂不可用] 剔除"
+    }
+  ]
+}
