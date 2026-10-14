@@ -1,18 +1,24 @@
 ---
 name: daily-event-direction-screen
-name_cn: 每日事件细分产业方向筛选排序
+name_cn: 每日事件细分产业方向筛选排序（利好/利空双向）
 name_en: Daily Event Industry-Segment Direction Screener
 description: >-
   事件后处理技能。读取用户指定目录内的多个 event-chain-navigator 输出 JSON，
-  按「推理置信度 / 影响方向 / 影响定级 / 传导强度」四轴逐层排除不利条目，
-  只保留「利好 + 推理置信度:高」的细分产业方向，再按七档优先级（最高/非常高/高/中高/中/中低/低）
-  做同义词统一命名、去重与计数排序，输出含「细分产业方向」与「排序逻辑（各优先级数量）」的 JSON。
-  同义词规则会沉淀到可跨事件复用的速查词典 shared/industry_segment_direction_dictionary.json
+  按「推理置信度 / 影响方向 / 影响定级 / 传导强度」四轴逐层筛选，方向口径由 --direction 选择：
+  利好档（--direction bullish，缺省）只保留「利好 + 推理置信度:高」；
+  利空档（--direction bearish）只保留「利空 + 推理置信度:高」（中性、相反方向、置信度 中/低 一律排除）。
+  两个方向共用同一张七档优先级阶梯（最高/非常高/高/中高/中/中低/低）、同一套去重/聚合/排序逻辑
+  与同一份速查词典：先做同义词统一命名，再去重，最后按各优先级的统计数量从高到低排序，
+  输出含「细分产业方向」与「排序逻辑（各优先级数量）」的 JSON。
+  输出按方向落位且方向显式：event-direction-rank-bullish_*.json / event-direction-rank-bearish_*.json，
+  并在顶层输出 方向口径 字段（利好/利空）供下游区分。
+  同义词规则沉淀到可跨事件、跨方向复用的速查词典 shared/industry_segment_direction_dictionary.json
   （默认自动新建、自动命中、自动累加确认次数；manual 条目永不被机器改写）。
   不调用任何数据源，纯本地确定性后处理；排序与计数由脚本计算，不依赖 LLM 心算。
-  触发关键词：细分产业方向、利好筛选、优先级排序、影响环节筛选、同义词归并、产业方向词典、
-  事件传导筛选、direction screening、sector priority ranking
-version: 1.0.0
+  触发关键词：细分产业方向、利好筛选、利空筛选、风险方向、负面事件、优先级排序、影响环节筛选、
+  同义词归并、产业方向词典、事件传导筛选、direction screening、bullish、bearish、
+  sector priority ranking
+version: 1.1.0
 ---
 
 # 每日事件细分产业方向筛选排序（daily-event-direction-screen）
@@ -21,9 +27,17 @@ version: 1.0.0
 
 你是**事件输出的后处理筛选器**。上游 `event-chain-navigator` 每分析一个事件会产出一份 JSON，
 其中 `影响环节[]` 列出若干「细分产业方向」及其影响方向、定级、传导强度、推理置信度。
-本技能把这些条目**收敛成一份可直接用于选题排序的清单**：
+本技能把这些条目**收敛成一份可直接用于选题排序的清单**，并支持两个方向口径：
 
-> 读多份事件 JSON → 逐层排除 → 同义词统一命名 → 去重 → 按优先级计数排序 → 输出 JSON
+> 读多份事件 JSON → 按 `--direction` 选定利好/利空 → 逐层排除 → 同义词统一命名 → 去重 → 按优先级计数排序 → 输出 JSON
+
+| `--direction` | 口径 | 只保留 | 输出 |
+|---|---|---|---|
+| `bullish`（缺省，也接受 `利好`） | 利好档 | 「利好 + 推理置信度:高」 | `event-direction-rank-bullish_<主题>_<日期>.json` |
+| `bearish`（也接受 `利空`） | 利空档 | 「利空 + 推理置信度:高」 | `event-direction-rank-bearish_<主题>_<日期>.json` |
+
+**两个方向的七档阶梯逐行相同**（见 `references/ranking-rules.md` §3.1 对照表），
+差异仅在方向门禁（`D1_NOT_BULLISH` / `D1_NOT_BEARISH`）与输出落位，因此共用同一个脚本、同一份词典。
 
 **关键原则：排序与计数全部交给脚本，LLM 只做语义归并判断。**
 不要让 LLM 手工统计档位数量或排序——长清单下必然算错，且不可复现。
@@ -38,10 +52,10 @@ version: 1.0.0
 
 | 文件 | 内容 |
 |------|------|
-| `references/input-schema.md` | 输入契约、字段表、枚举规范化、容错规则 |
-| `references/ranking-rules.md` | **判定规则单一真源**：排除规则 / 优先级阶梯 / 去重 / 聚合 / 排序 |
-| `references/dictionary-format.md` | 速查词典结构、读写协议、冲突与裁剪规则 |
-| `references/output-format.md` | 结果 JSON 结构、字段说明、文件落位规则 |
+| `references/input-schema.md` | 输入契约、字段表、`--direction` 方向口径、枚举规范化、容错规则 |
+| `references/ranking-rules.md` | **判定规则单一真源**：方向 profile / 排除规则 / 优先级阶梯 / 去重 / 聚合 / 排序 |
+| `references/dictionary-format.md` | 速查词典结构、读写协议、跨方向共用、冲突与裁剪规则 |
+| `references/output-format.md` | 结果 JSON 结构、方向化文件落位、命名迁移、下游混料警告 |
 
 ---
 
@@ -58,22 +72,33 @@ version: 1.0.0
 | 用户给出目录并要求含子目录 | 加 `--recursive` |
 | **用户未提及目录** | **必须提问一次**：`请给出存放 event-chain-navigator JSON 的目录`；不得静默猜路径 |
 
-### 0.2 输出目标
+### 0.2 方向口径（`--direction`）
+
+| 情形 | 动作 |
+|------|------|
+| 用户说"利好/受益/机会方向" | `--direction bullish`（**缺省**，与 1.0.0 行为逐字节一致） |
+| 用户说"利空/风险/受损/回避方向" | `--direction bearish`（也接受 `--direction 利空`） |
+| 用户没说方向 | **默认 bullish**；若语境指向风险（"有什么风险""哪些方向要躲"）则用 bearish |
+| **同一次运行只出一个方向** | 两个方向都要，就跑两次（输出目录/文件名按方向天然隔离） |
+
+### 0.3 输出目标
 
 | 情形 | 动作 |
 |------|------|
 | 用户明确给了输出目录 | `--out <该目录>` |
 | 用户明确说"只打印/给我看" | `--stdout` |
 | 用户明确说"只要方向名和数量" | `--minimal` |
-| 用户未提及 | 默认落盘：`--out` 不传时写到**输入目录同级的 `event-direction-rank/`**；落盘后只报路径与摘要 |
+| 用户未提及 | 默认落盘：`--out` 不传时写到**输入目录同级的 `event-direction-rank-<slug>/`**（`<slug>` = `bullish`/`bearish`）；落盘后只报路径与摘要 |
 | 用户要"先看看别写文件" | `--stdout --no-dict-write`（干跑，不动词典） |
 
-### 0.3 词典路径
+### 0.4 词典路径
 
 | 情形 | 动作 |
 |------|------|
 | 用户指定了词典路径 | `--dict <path>` |
 | 未指定 | 用默认 `[当前工作区根目录]/shared/industry_segment_direction_dictionary.json`（不存在则自动新建） |
+
+词典**跨方向共用同一份**：利好与利空的标准名/别名互相复用，`--direction` 不改变词典路径。
 
 **禁止写死绝对路径、用户名或平台专有路径**（本技能会被分享给他人）。
 **禁止写进技能自身目录**——技能目录按约定只读。
@@ -84,17 +109,17 @@ version: 1.0.0
 
 ```bash
 node <技能目录>/scripts/screen.mjs inventory \
-  --input <输入目录> [--recursive] [--dict <词典路径>]
+  --input <输入目录> [--direction bullish|bearish] [--recursive] [--dict <词典路径>]
 ```
 
-脚本产出 `inventory.json`，包含：
+脚本产出 `inventory.json`（含顶层 `方向口径`），包含：
 
 - `输入文件[]`、`输入条目总数`、`保留条目总数`、`跳过文件[]`（附错误码）
 - `candidates[]`：**只含被保留条目**的「细分产业方向」，每条含 `命中词典` / `词典标准名` / `条目数` / `保留条目数` / `剔除条目数` / `优先级分布` / `出现文件[]` / `证据日期[]` / `名称候选提示[]`
 - `仅剔除的名称[]`：已被排除、无需参与归并的名称（单列，避免污染候选）
 - `需要LLM决议[]`：候选里未命中词典、需要本轮判断的名称
 
-**回报给用户**：读取了几个文件、多少条条目、多少个名称需要归并、跳过了哪些文件及原因、词典命中多少条。
+**回报给用户**：读取了几个文件、本次方向口径、多少条条目、多少个名称需要归并、跳过了哪些文件及原因、词典命中多少条。
 **跳过文件必须如实说明**，不得静默忽略。
 
 ---
@@ -103,16 +128,20 @@ node <技能目录>/scripts/screen.mjs inventory \
 
 脚本已按 `references/ranking-rules.md` 完成排除，SKILL 只需把结果讲清楚（`剔除原因统计` 可直接用）：
 
-| 规则 | 条件 | 原因码 |
-|------|------|--------|
-| 排除 1 | `推理置信度 = 低` | `R1_LOW_CONFIDENCE` |
-| 排除 2 | `影响方向 = 利空` **且** `影响定级 = S级` **且** `推理置信度 = 高` | `R2_BEARISH_S_HIGH` |
-| 排除 3 | `影响方向 = 利空` **且** `影响定级 = A级` **且** `传导强度 = 一级传导/高` **且** `推理置信度 = 高` | `R3_BEARISH_A_L1_HIGH` |
-| 门禁 1 | `影响方向 ≠ 利好`（含 `中性`） | `D1_NOT_BULLISH` |
-| 门禁 2 | `推理置信度 ≠ 高`（即 `中`） | `D2_CONFIDENCE_NOT_HIGH` |
+| 规则 | 条件 | 原因码 | 适用方向 |
+|------|------|--------|---------|
+| 排除 1 | `推理置信度 = 低` | `R1_LOW_CONFIDENCE` | 双向 |
+| 排除 2 | `影响方向 = 利空` **且** `影响定级 = S级` **且** `推理置信度 = 高` | `R2_BEARISH_S_HIGH` | 仅利好档 |
+| 排除 3 | `影响方向 = 利空` **且** `影响定级 = A级` **且** `传导强度 = 一级传导/高` **且** `推理置信度 = 高` | `R3_BEARISH_A_L1_HIGH` | 仅利好档 |
+| 门禁 1 | `影响方向 ≠ 利好`（含 `中性`、残留 `利空`） | `D1_NOT_BULLISH` | 仅利好档 |
+| 门禁 1′ | `影响方向 ≠ 利空`（含 `中性`、`利好`） | `D1_NOT_BEARISH` | 仅利空档 |
+| 门禁 2 | `推理置信度 ≠ 高`（即 `中`） | `D2_CONFIDENCE_NOT_HIGH` | 双向 |
 
-> **口径（已与用户确认）**：只有「利好 + 推理置信度 高」进入分级。
-> `中性`、残留 `利空`、`推理置信度 中` **一律排除出结果，不进入「低」档**。
+> **口径（已与用户确认）**：利好档只有「利好 + 推理置信度 高」进入分级；利空档只有「利空 + 推理置信度 高」进入分级。
+> `中性`、相反方向、`推理置信度 中/低` **一律排除出结果，不进入「低」档**。
+>
+> **利空档不设 `R2`/`R3` 的镜像码**：那两个码是"利好档里对最强利空项做硬排除"，其镜像（利好强项）
+> 已被 `D1_NOT_BEARISH` 完整覆盖，不是遗漏。
 
 **在回复中必须给出剔除计数表**，让用户一眼看到筛掉了什么、为什么。
 
@@ -124,7 +153,7 @@ node <技能目录>/scripts/screen.mjs inventory \
 
 1. `inventory` 已把 `命中词典` 的名称标出——**这些不要再判断**，直接沿用词典标准名。
 2. 只对 `需要LLM决议[]` 里的名称做语义判断。
-3. 产出当次增量映射文件 `canonical.json`（写到工作区临时位置，如 `event-direction-rank/canonical.json`）：
+3. 产出当次增量映射文件 `canonical.json`（写到工作区临时位置，如 `event-direction-rank-bullish/canonical.json`）：
 
 ```json
 {
@@ -147,6 +176,7 @@ node <技能目录>/scripts/screen.mjs inventory \
 4. 标准名取值：词典既有标准名 → 出现频次最高者 → 平票时取语义最完整最具体者 → 再平票取字面最长者。
 5. 拿不准就**不合并**，并在 `不合并[]` 写明理由；宁可多一条，不可错并。
 6. 名称候选提示（`名称候选提示[]`）只是确定性信号（归一化同形 / 名词片段相同 / 共享子串），**不是结论**。
+7. **跨方向复用**：利好档与利空档共用同一份词典；某个方向的标准名一旦沉淀，另一方向直接命中，不要重复判断。
 
 ---
 
@@ -154,7 +184,7 @@ node <技能目录>/scripts/screen.mjs inventory \
 
 ```bash
 node <技能目录>/scripts/screen.mjs rank \
-  --input <输入目录> [--canonical <canonical.json>] \
+  --input <输入目录> [--direction bullish|bearish] [--canonical <canonical.json>] \
   [--dict <词典路径>] [--out <输出目录>] [--stdout] [--minimal] [--no-dict-write]
 ```
 
@@ -163,17 +193,23 @@ node <技能目录>/scripts/screen.mjs rank \
 
 - 无同义词需要归并时，`--canonical` 可省略（纯按词典运行）；
   若仍有名称既未命中词典也未给出映射，脚本以 `E_UNMAPPED_NAME` 终止，**不静默漏并**。
-- 排序比较链固定为 `最高 > 非常高 > 高 > 中高 > 中 > 中低 > 低`，逐位比较数量，全等时按标准名字典序兜底。
+- 排序比较链固定为 `最高 > 非常高 > 高 > 中高 > 中 > 中低 > 低`（两个方向共用），逐位比较数量，全等时按标准名字典序兜底。
+- **输出按方向落位**（见 `references/output-format.md` §4）：
+  `event-direction-rank-bullish_<主题>_<日期>.json` 或 `event-direction-rank-bearish_<主题>_<日期>.json`，
+  顶层带 `方向口径`（`利好`/`利空`）。旧版 `event-direction-rank_*.json` 仅为历史产物，不再生成。
 - 词典回写：新增别名/标准名入表、`确认次数` +1、冲突入 `冲突[]`；`来源: manual` 的条目永不被机器改写。
 - `--stdout` 与 `--no-dict-write` 为**只读干跑**，不写词典。
 
 **回复中只报**（不重复整段 JSON）：
 
-1. 结果文件路径
+1. 结果文件路径 + 本次 `方向口径`（利好/利空）
 2. 一行摘要：保留 N 个方向 + Top 3（含别名数量）
 3. **本轮词典变更摘要**：命中别名数 / 新增别名数 / 新增标准名数 / 冲突清单
 
 用户明确要求时才打印完整 JSON 或改用 `--stdout`。
+
+> **混料红线**：利空口径结果不可与利好结果放进同一目录喂给 `santi-3-timeliness-rank aggregate`
+> （它会按内容求和七档计数）。默认目录已按方向隔离；santi-3 1.1.0 起也会跳过 `方向口径=利空` 的文件。
 
 ---
 
@@ -184,6 +220,7 @@ node <技能目录>/scripts/screen.mjs rank \
 | 默认路径 | `[当前工作区根目录]/shared/industry_segment_direction_dictionary.json` |
 | 创建时机 | 首次 `rank` 运行时自动新建（目录不存在则创建） |
 | 键索引 | 按**别名**查表，标准名可继续追加别名 |
+| 跨方向共用 | 利好档与利空档用**同一份**词典；`--direction` 不改变词典路径，别名/标准名双向复用、`确认次数` 共同累加 |
 | `来源` | `manual`（人工锁定，永不被覆盖）\| `llm-accumulate`（运行自动沉淀） |
 | `确认次数` | **每次运行、每个标准名最多 +1**（不是每命中一条 +1） |
 | 写入方式 | 临时文件 + `rename` 原子写；无实质变化不改 `updated_at`，避免 git churn |
@@ -198,11 +235,13 @@ node <技能目录>/scripts/screen.mjs rank \
 
 | 命令 | 作用 |
 |------|------|
-| `inventory --input <目录> [--recursive] [--dict <path>] [--out <清单路径>]` | 校验 + 归一 + 标记词典命中，产出候选清单（**只读词典**） |
-| `rank --input <目录> [--canonical <json>] [--dict <path>] [--out <目录>] [--stdout] [--minimal] [--no-dict-write] [--allow-identity] [--recursive]` | 合并 → 去重 → 聚合 → 排序 → 落盘 → 回写词典 |
+| `inventory --input <目录> [--direction bullish\|bearish] [--recursive] [--dict <path>] [--out <清单路径>]` | 校验 + 归一 + 标记词典命中，产出候选清单（**只读词典**） |
+| `rank --input <目录> [--direction bullish\|bearish] [--canonical <json>] [--dict <path>] [--out <目录>] [--stdout] [--minimal] [--no-dict-write] [--allow-identity] [--recursive]` | 合并 → 去重 → 聚合 → 排序 → 落盘 → 回写词典 |
 | `dict:show [--dict <path>]` | 打印词典映射、别名、冲突；不修改 |
 | `dict:prune --unused <N> [--dict <path>] [--yes]` | 裁剪 `确认次数 < N` 的 `llm-accumulate` 条目；`manual` 永不裁剪 |
-| `selftest` | 跑全部断言（样本/词典复用/幂等/只读/manual/冲突/边界/空结果/合成排序/指纹去重） |
+| `selftest` | 跑全部断言（样本/词典复用/幂等/只读/manual/冲突/边界/空结果/合成排序/指纹去重 + 利空阶梯/方向等价/非法方向/空利空/跨方向词典/只读） |
+
+`--direction` 取值：`bullish`（缺省）/ `bearish`，也接受 `利好` / `利空`。
 
 退出码：`0` 成功 / `1` 业务校验失败 / `2` 用法错误。
 
@@ -219,8 +258,9 @@ node <技能目录>/scripts/screen.mjs rank \
 | `E_DICT_PARSE` / `E_DICT_SHAPE` | 词典无法解析 / 结构不符 | 退出 1，**不覆盖原文件**，提示修复或换 `--dict` |
 | `E_UNMAPPED_NAME` | 入选名称既未命中词典也无 `canonical` | 退出 1，列出全部缺失名，不落盘 |
 | `E_INVALID_MAPPING` | 映射值为空串/非字符串 | 退出 1 |
+| `E_USAGE` | `--direction` 取值非法 / 缺必需参数 / 未知子命令 | 退出 2，不产出文件 |
 | `W_MISSING_FIELD` | 条目缺必需枚举字段 | 按规则落「低」或排除，留痕不静默 |
-| `W_UNCLASSIFIED_ROW` | 利好+高置信但不在阶梯枚举内 | 落「低」档并留痕 |
+| `W_UNCLASSIFIED_ROW` | 方向与高置信度都合规，但不在阶梯枚举内 | 落「低」档并留痕 |
 | `W_DUPLICATE_DROPPED` | 指纹重复条目 | 去重（防止放大计数） |
 | `W_CONFLICT` | 别名映射冲突 / 词典覆盖本轮声明 | 保留词典原映射，入 `冲突[]`，回复中报告 |
 | `W_MANUAL_LOCKED` | 拟改动 `manual` 条目 | 保留人工值并留痕 |
@@ -232,12 +272,13 @@ node <技能目录>/scripts/screen.mjs rank \
 ## 输出前自检清单
 
 ```
-□ Step 0：输入目录是否已确认（未给则已提问且只问一次）？输出目标与词典路径是否已确定？
+□ Step 0：输入目录是否已确认（未给则已提问且只问一次）？方向口径（--direction）、输出目标与词典路径是否已确定？
 □ 是否读取了全部目标文件？跳过的文件与原因是否如实报告（未静默忽略）？
-□ 剔除计数是否与 ranking-rules 的 R1/R2/R3/D1/D2 表一致？是否向用户展示了剔除计数表？
-□ 保留的是否只有「利好 + 推理置信度:高」？中性/利空/中置信度是否确已排除（未落进「低」档）？
+□ 剔除计数是否与 ranking-rules 的 R1/R2/R3/D1/D1′/D2 表一致？是否向用户展示了剔除计数表？
+□ 保留的是否只有「本次方向 + 推理置信度:高」？中性/相反方向/中低置信度是否确已排除（未落进「低」档）？
+□ 输出顶层 `方向口径` 是否与本次 `--direction` 一致（利好档不得出利空结果，反之亦然）？
 □ 同义词归并是否只合并了语义等价项？上下位关系是否明确未合并并写入 不合并[]？
-□ inventory 中「命中词典」的名称是否直接复用、未重复判断？
+□ inventory 中「命中词典」的名称是否直接复用、未重复判断？跨方向的既有标准名是否直接复用？
 □ 是否没有手工统计档位数量或排序（排序必须来自脚本）？
 □ 比较链是否为 最高>非常高>高>中高>中>中低>低？
 □ 未知定级/缺字段条目是否落到「低」或排除并留痕，未静默入选？
@@ -245,7 +286,9 @@ node <技能目录>/scripts/screen.mjs rank \
 □ 词典是否已正确回写？manual 条目是否未被改写？冲突是否已报告？
 □ 是否有未映射名称（应为 0，否则应已终止）？
 □ 输出中是否完全没有个股名称/代码/标的清单？
-□ 落盘时：是否只报了路径 + 摘要 + 词典变更，未重复整段 JSON？写入失败是否未谎报？
+□ 落盘时：文件是否落到方向目录 `event-direction-rank-<slug>/` 且文件名为方向显式？
+□ 是否只报了路径 + 摘要 + 词典变更，未重复整段 JSON？写入失败是否未谎报？
+□ 利空结果是否**没有**与利好结果混进同一目录喂给 santi-3 aggregate？
 ```
 
 ---
@@ -255,3 +298,4 @@ node <技能目录>/scripts/screen.mjs rank \
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | 1.0.0 | 2026-10-12 | 首次发布。建立四轴逐层排除规则（R1–R3 / D1–D2）、七档优先级阶梯、同义词统一命名与速查词典沉淀机制（默认 `shared/industry_segment_direction_dictionary.json`，自动新建、按别名命中、确认次数累加、manual 锁定）、指纹去重、比较链降序排序、结果 JSON 输出规范、`inventory/rank/dict:show/dict:prune/selftest` 五个子命令与完整错误码表；含样本、词典复用、幂等、只读、manual、冲突、边界、空结果、合成排序、指纹去重十组自测断言 |
+| 1.1.0 | 2026-10-14 | 参数化双向：新增 `--direction bullish\|bearish`（缺省 bullish，stdout JSON 除版本号与新增 `方向口径` 外逐字节保持 1.0.0 行为），利空档只保留「利空 + 推理置信度:高」并走方向门禁 `D1_NOT_BEARISH`（不设 R2/R3 镜像码）；七档阶梯、归一化、去重、聚合、排序、词典协议单源共用；输出改为方向显式 `event-direction-rank-{bullish\|bearish}_<主题>_<日期>.json` 并落到方向目录，顶层新增 `方向口径` 字段；词典跨方向共用；修正 `inventory` 默认清单落位：输入为目录时改为落到「输入目录同级的 `event-direction-rank-<slug>/`」（原实现会多退一级到祖父目录，与文档不符）；`selftest` 追加利空阶梯/利空混料/跨方向词典复用/方向等价/非法方向/空利空结果/利空只读七组断言 |

@@ -3,14 +3,21 @@
  * daily-event-direction-screen / scripts/screen.mjs
  *
  * 读取上游 event-chain-navigator 输出的一批 JSON，
- * 按 references/ranking-rules.md 的规则逐层筛选「利好」细分产业方向，
+ * 按 references/ranking-rules.md 的规则逐层筛选细分产业方向，
  * 借助同义词速查词典做统一命名，最后按优先级档位计数降序排序并输出 JSON。
+ *
+ * 方向由 --direction 决定（缺省 bullish）：
+ *   bullish（利好档，逐字节保持 1.0.0 行为）：R1 → R2 → R3 → D1_NOT_BULLISH → D2 → 阶梯
+ *   bearish（利空档）：                    R1 → D1_NOT_BEARISH → D2 → 同一张阶梯
+ * 七档阶梯与归一化、去重、聚合、排序、词典协议两个方向共用单份实现。
  *
  * 仅使用 Node 标准库，无第三方依赖。
  *
  * 用法：
- *   node scripts/screen.mjs inventory --input <目录|文件> [--recursive] [--dict <path>]
- *   node scripts/screen.mjs rank      --input <目录|文件> [--canonical <mapping.json>]
+ *   node scripts/screen.mjs inventory --input <目录|文件> [--direction bullish|bearish]
+ *                                     [--recursive] [--dict <path>]
+ *   node scripts/screen.mjs rank      --input <目录|文件> [--direction bullish|bearish]
+ *                                     [--canonical <mapping.json>]
  *                                     [--dict <path>] [--out <目录>] [--stdout]
  *                                     [--minimal] [--no-dict-write]
  *   node scripts/screen.mjs dict:show  [--dict <path>]
@@ -29,7 +36,7 @@ const SKILL_DIR = path.resolve(SCRIPT_DIR, "..");
 const SKILL_ROOT = path.resolve(SKILL_DIR, "..", "..");
 
 const SKILL_NAME = "daily-event-direction-screen";
-const SKILL_VERSION = "1.0.0";
+const SKILL_VERSION = "1.1.0";
 const DICT_FORMAT_VERSION = 1;
 
 const TIERS = ["最高", "非常高", "高", "中高", "中", "中低", "低"];
@@ -59,6 +66,62 @@ const LADDER = [
   { grade: "B", level: 1, strength: 2, tier: "中低" },
   { grade: "B", level: 2, strength: 3, tier: "中低" },
 ];
+
+/**
+ * 方向 profile：两个方向共用同一张 LADDER 与全部归一化/去重/聚合/排序逻辑，
+ * 仅「方向门禁 + 反向硬排除 + 输出落位 + 文案」不同。
+ * bullish 的 hardExcludes 必须与 1.0.0 的 R2/R3 分支逐条对应，保证默认行为逐字节不变；
+ * bearish 不设镜像 R2/R3——利好强项由方向门禁 D1_NOT_BEARISH 完整覆盖。
+ */
+const PROFILES = {
+  bullish: {
+    key: "bullish",
+    direction: "利好",
+    slug: "bullish",
+    dirName: "event-direction-rank-bullish",
+    filePrefix: "event-direction-rank-bullish",
+    gateReason: EXCLUDE_D1,
+    unclassifiedText: "利好 + 高置信度，但不在阶梯枚举内，已落「低」档",
+    hardExcludes: [
+      { reason: EXCLUDE_R2, direction: "利空", grade: "S", confidence: "高" },
+      { reason: EXCLUDE_R3, direction: "利空", grade: "A", level: 1, strength: 3, confidence: "高" },
+    ],
+  },
+  bearish: {
+    key: "bearish",
+    direction: "利空",
+    slug: "bearish",
+    dirName: "event-direction-rank-bearish",
+    filePrefix: "event-direction-rank-bearish",
+    gateReason: "D1_NOT_BEARISH",
+    unclassifiedText: "利空 + 高置信度，但不在阶梯枚举内，已落「低」档",
+    hardExcludes: [],
+  },
+};
+
+const DEFAULT_PROFILE = PROFILES.bullish;
+
+/** --direction 取值解析：bullish|bearish|利好|利空；缺省 bullish；非法 → E_USAGE(exit 2) */
+function resolveProfile(raw) {
+  if (raw === undefined || raw === null || str(raw).trim() === "") return DEFAULT_PROFILE;
+  const s = str(raw).trim().toLowerCase();
+  if (s === "bullish" || s === "利好") return PROFILES.bullish;
+  if (s === "bearish" || s === "利空") return PROFILES.bearish;
+  throw new CliError(
+    "E_USAGE",
+    `--direction 取值非法：${raw}（允许 bullish|bearish|利好|利空，缺省 bullish）`,
+    2
+  );
+}
+
+function hardExcludeHit(rule, direction, grade, strength, confidence) {
+  if (rule.direction && rule.direction !== direction) return false;
+  if (rule.grade && rule.grade !== grade) return false;
+  if (rule.confidence && rule.confidence !== confidence) return false;
+  if (rule.level !== undefined && (!strength || strength.level !== rule.level)) return false;
+  if (rule.strength !== undefined && (!strength || strength.strength !== rule.strength)) return false;
+  return true;
+}
 
 // ─────────────────────────────────────────────────────────── 基础工具
 class CliError extends Error {
@@ -183,7 +246,7 @@ function gradeTier(grade, level, strength) {
   return "低";
 }
 
-function judge(item) {
+function judge(item, profile = DEFAULT_PROFILE) {
   const directionRaw = item["影响方向"];
   const gradeRaw = item["影响定级"];
   const strengthRaw = item["传导强度"];
@@ -201,19 +264,12 @@ function judge(item) {
   if (confidence === null) missing.push("推理置信度");
 
   if (confidence === "低") return { kept: false, reason: EXCLUDE_R1, missing };
-  if (direction === "利空" && grade === "S" && confidence === "高")
-    return { kept: false, reason: EXCLUDE_R2, missing };
-  if (
-    direction === "利空" &&
-    grade === "A" &&
-    strength &&
-    strength.level === 1 &&
-    strength.strength === 3 &&
-    confidence === "高"
-  )
-    return { kept: false, reason: EXCLUDE_R3, missing };
+  for (const rule of profile.hardExcludes) {
+    if (hardExcludeHit(rule, direction, grade, strength, confidence))
+      return { kept: false, reason: rule.reason, missing };
+  }
 
-  if (direction !== "利好") return { kept: false, reason: EXCLUDE_D1, missing };
+  if (direction !== profile.direction) return { kept: false, reason: profile.gateReason, missing };
   if (confidence !== "高") return { kept: false, reason: EXCLUDE_D2, missing };
 
   let tier;
@@ -582,7 +638,7 @@ function buildNameHints(names) {
 }
 
 // ─────────────────────────────────────────────────────────── 扫描 + 解析
-function buildEntries(inputPath, recursive, dictCtx, warnings) {
+function buildEntries(inputPath, recursive, dictCtx, warnings, profile = DEFAULT_PROFILE) {
   const files = scanInputFiles(inputPath, recursive);
   if (files.length === 0) {
     throw new CliError("E_NO_INPUT_FILES", `目录内没有可用的 JSON 文件：${inputPath}`, 1);
@@ -615,14 +671,14 @@ function buildEntries(inputPath, recursive, dictCtx, warnings) {
         entries.push({ raw: item, dropped: true, reason: EXCLUDE_SKIPPED, file: base });
         continue;
       }
-      const verdict = judge(item);
+      const verdict = judge(item, profile);
       for (const field of verdict.missing ?? []) {
         warnings.add("W_MISSING_FIELD", `缺少或无法解析字段 ${field}`, `${base}#${idx} ${name}`);
       }
       if (verdict.kept && verdict.unclassified) {
         warnings.add(
           "W_UNCLASSIFIED_ROW",
-          "利好 + 高置信度，但不在阶梯枚举内，已落「低」档",
+          profile.unclassifiedText,
           `${base}#${idx} ${name}`
         );
       }
@@ -644,13 +700,15 @@ function buildEntries(inputPath, recursive, dictCtx, warnings) {
 
 // ─────────────────────────────────────────────────────────── inventory
 function cmdInventory(opts) {
+  const profile = opts.profile ?? DEFAULT_PROFILE;
   const warnings = new Warnings();
   const dictCtx = loadDictionary(opts.dict, warnings);
   const { entries, files, skipped, totalRaw } = buildEntries(
     opts.input,
     opts.recursive,
     dictCtx,
-    warnings
+    warnings,
+    profile
   );
 
   const nameAgg = new Map();
@@ -725,6 +783,7 @@ function cmdInventory(opts) {
       词典已存在: dictCtx.existed,
       词典命中条目数: dictHits,
     },
+    方向口径: profile.direction,
     warnings: warnings.list,
     candidates,
     需要LLM决议: candidates.filter((c) => !c.命中词典).map((c) => c.名称),
@@ -753,6 +812,7 @@ function resolveCanonical(entry, canonicalMap, warnings) {
 }
 
 function cmdRank(opts) {
+  const profile = opts.profile ?? DEFAULT_PROFILE;
   const warnings = new Warnings();
   const dictCtx = loadDictionary(opts.dict, warnings);
 
@@ -786,7 +846,8 @@ function cmdRank(opts) {
     opts.input,
     opts.recursive,
     dictCtx,
-    warnings
+    warnings,
+    profile
   );
 
   // 未映射名校验在归并后做（只针对真正入选的条目，避免对剔除项做无意义要求）
@@ -950,8 +1011,8 @@ function cmdRank(opts) {
   const eventDateForName = firstEventDate(entries, files) ?? nowDate();
   const outDir = opts.out
     ? path.resolve(opts.out)
-    : path.resolve(path.dirname(files[0]), "..", "event-direction-rank");
-  const outFile = path.join(outDir, `event-direction-rank_${topic}_${eventDateForName}.json`);
+    : path.resolve(path.dirname(files[0]), "..", profile.dirName);
+  const outFile = path.join(outDir, `${profile.filePrefix}_${topic}_${eventDateForName}.json`);
 
   const minimalMeta = {
     generated_at: nowStamp(),
@@ -989,6 +1050,7 @@ function cmdRank(opts) {
 
   const payload = {
     meta: opts.minimal ? minimalMeta : fullMeta,
+    方向口径: profile.direction,
     排序逻辑: sortLogic,
     细分产业方向: directions,
   };
@@ -1140,6 +1202,7 @@ function cmdDictPrune(opts) {
 
 // ─────────────────────────────────────────────────────────── selftest
 function runRankQuiet(inputPath, dictPath, canonicalDoc, extra = {}) {
+  const profile = extra.profile ?? DEFAULT_PROFILE;
   const warnings = new Warnings();
   const dictCtx = loadDictionary(dictPath, warnings);
   const canonicalMap = new Map();
@@ -1147,7 +1210,7 @@ function runRankQuiet(inputPath, dictPath, canonicalDoc, extra = {}) {
   for (const [from, to] of Object.entries(src)) {
     canonicalMap.set(norm(from).trim(), String(to).trim());
   }
-  const { entries, files, skipped, totalRaw } = buildEntries(inputPath, false, dictCtx, warnings);
+  const { entries, files, skipped, totalRaw } = buildEntries(inputPath, false, dictCtx, warnings, profile);
   const unmapped = [];
   for (const entry of entries) {
     if (entry.dropped || !entry.verdict?.kept) continue;
@@ -1528,8 +1591,125 @@ function cmdSelftest() {
     if (!dup.warnings.keys().includes("W_DUPLICATE_DROPPED"))
       failures.push("去重：缺少 warning W_DUPLICATE_DROPPED");
 
+    // ── 11. 利空方向：11 行阶梯 + 低档 + 门禁 + 指纹去重
+    const bearishDir = path.join(fixturesDir, "bearish-sample");
+    const bearish = runRankQuiet(bearishDir, path.join(tmp, "bearish", "dict.json"), null, {
+      allowIdentity: true,
+      profile: PROFILES.bearish,
+    });
+    const expBear = expected.bearishSample;
+    expectEqual(bearish.sorted.map((g) => g.name), expBear.order, "利空：排序后的方向序列", failures);
+    expectEqual(bearish.sorted.map((g) => g.counts), expBear.counts, "利空：七档计数", failures);
+    expectEqual(bearish.totalRaw, expBear.totalRaw, "利空：输入条目总数", failures);
+    expectEqual(bearish.keptCount, expBear.keptCount, "利空：保留条数", failures);
+    expectEqual(bearish.dropped, expBear.dropped, "利空：剔除条数", failures);
+    expectEqual(bearish.exclusionStats, expBear.exclusionStats, "利空：剔除原因统计", failures);
+    for (const code of expBear.requireWarnings) {
+      if (!bearish.warnings.keys().includes(code)) failures.push(`利空：缺少 warning ${code}`);
+    }
+    for (const code of ["R2_BEARISH_S_HIGH", "R3_BEARISH_A_L1_HIGH", "D1_NOT_BULLISH"]) {
+      if (Object.prototype.hasOwnProperty.call(bearish.exclusionStats, code))
+        failures.push(`利空：不应出现利好档专属原因码 ${code}`);
+    }
+
+    // ── 12. 利空混料：同名 利好/中性/利空 并存，只收利空侧
+    const mixed = runRankQuiet(
+      path.join(fixturesDir, "bearish-mixed"),
+      path.join(tmp, "mixed", "dict.json"),
+      null,
+      { allowIdentity: true, profile: PROFILES.bearish }
+    );
+    const expMixed = expected.bearishMixed;
+    expectEqual(mixed.sorted.map((g) => g.name), expMixed.order, "利空混料：方向序列", failures);
+    expectEqual(mixed.sorted.map((g) => g.counts), expMixed.counts, "利空混料：七档计数", failures);
+    expectEqual(mixed.totalRaw, expMixed.totalRaw, "利空混料：输入条目总数", failures);
+    expectEqual(mixed.keptCount, expMixed.keptCount, "利空混料：保留条数", failures);
+    expectEqual(mixed.dropped, expMixed.dropped, "利空混料：剔除条数", failures);
+    expectEqual(mixed.exclusionStats, expMixed.exclusionStats, "利空混料：剔除原因统计", failures);
+
+    // ── 13. 跨方向词典复用：利好沉淀 → 利空直接命中，不新增标准名
+    const crossDir = path.join(fixturesDir, "direction-alias-reuse");
+    const crossDictPath = path.join(tmp, "cross", "dict.json");
+    const expCross = expected.directionAliasReuse;
+    const seedRun = runRankQuiet(path.join(crossDir, "bullish"), crossDictPath, expCross.seedCanonical);
+    if (!seedRun.dictResult.addedCanonicals.includes(expCross.canonical))
+      failures.push(`跨方向词典：利好轮次应沉淀标准名「${expCross.canonical}」`);
+    const cross = runRankQuiet(path.join(crossDir, "bearish"), crossDictPath, null, {
+      profile: PROFILES.bearish,
+    });
+    const crossGroup = cross.sorted.find((g) => g.name === expCross.canonical);
+    if (!crossGroup) failures.push(`跨方向词典：利空轮次未复用标准名「${expCross.canonical}」`);
+    else {
+      expectEqual(crossGroup.counts, expCross.counts, "跨方向词典：七档计数", failures);
+      expectEqual(crossGroup.aliases, expCross.aliases, "跨方向词典：别名列表", failures);
+    }
+    expectEqual(
+      cross.dictResult.addedCanonicals,
+      expCross.addedCanonicalsOnBearish,
+      "跨方向词典：利空轮次不应新增标准名",
+      failures
+    );
+
+    // ── 14. 方向等价：缺省 profile 与显式 bullish 结果一致
+    const implicit = runRankQuiet(sampleDir, path.join(tmp, "dir-eq-a", "dict.json"), null, {
+      allowIdentity: true,
+    });
+    const explicitBull = runRankQuiet(sampleDir, path.join(tmp, "dir-eq-b", "dict.json"), null, {
+      allowIdentity: true,
+      profile: PROFILES.bullish,
+    });
+    expectEqual(
+      implicit.sorted.map((g) => g.name),
+      explicitBull.sorted.map((g) => g.name),
+      "方向等价：缺省 profile 应等于 bullish（序列）",
+      failures
+    );
+    expectEqual(
+      implicit.sorted.map((g) => g.counts),
+      explicitBull.sorted.map((g) => g.counts),
+      "方向等价：缺省 profile 应等于 bullish（计数）",
+      failures
+    );
+    expectEqual(
+      implicit.exclusionStats,
+      explicitBull.exclusionStats,
+      "方向等价：缺省 profile 应等于 bullish（剔除统计）",
+      failures
+    );
+
+    // ── 15. 非法 --direction → E_USAGE / 退出码 2
+    try {
+      resolveProfile("bogus");
+      failures.push("非法方向：未抛出 E_USAGE");
+    } catch (err) {
+      if (err.code !== "E_USAGE") failures.push(`非法方向：期望 E_USAGE，实际 ${err.code ?? err.message}`);
+      if (err.exitCode !== 2) failures.push(`非法方向：期望退出码 2，实际 ${err.exitCode}`);
+    }
+    if (resolveProfile(undefined) !== PROFILES.bullish) failures.push("非法方向：缺省值应为 bullish");
+    if (resolveProfile("利空") !== PROFILES.bearish) failures.push("非法方向：中文「利空」应解析为 bearish");
+
+    // ── 16. 空利空结果：sample 全为利好 → 保留 0 条
+    const emptyBear = runRankQuiet(sampleDir, path.join(tmp, "empty-bear", "dict.json"), null, {
+      profile: PROFILES.bearish,
+    });
+    expectEqual(emptyBear.sorted, [], "空利空：应为空数组", failures);
+    expectEqual(emptyBear.keptCount, 0, "空利空：保留条数应为 0", failures);
+
+    // ── 17. 利空只读：noDictWrite 不改词典
+    const bearDictBefore = fs.readFileSync(path.join(tmp, "bearish", "dict.json"), "utf8");
+    runRankQuiet(bearishDir, path.join(tmp, "bearish", "dict.json"), null, {
+      allowIdentity: true,
+      profile: PROFILES.bearish,
+      noDictWrite: true,
+    });
+    if (fs.readFileSync(path.join(tmp, "bearish", "dict.json"), "utf8") !== bearDictBefore)
+      failures.push("利空只读：--no-dict-write 不应改动词典");
+
     passes.push(
       "样本 / 词典复用 / 幂等 / 只读 / manual / 冲突 / 边界 / 空结果 / 合成排序 / 指纹去重"
+    );
+    passes.push(
+      "利空阶梯 / 利空混料 / 跨方向词典复用 / 方向等价 / 非法方向 / 空利空结果 / 利空只读"
     );
   });
 
@@ -1582,13 +1762,20 @@ function requireOpt(args, key) {
 
 function usage() {
   console.log(`用法：
-  node scripts/screen.mjs inventory --input <目录|文件> [--recursive] [--dict <path>] [--out <清单路径>]
-  node scripts/screen.mjs rank      --input <目录|文件> [--canonical <mapping.json>] [--dict <path>]
+  node scripts/screen.mjs inventory --input <目录|文件> [--direction bullish|bearish]
+                                    [--recursive] [--dict <path>] [--out <清单路径>]
+  node scripts/screen.mjs rank      --input <目录|文件> [--direction bullish|bearish]
+                                    [--canonical <mapping.json>] [--dict <path>]
                                     [--out <目录>] [--stdout] [--minimal] [--no-dict-write]
                                     [--allow-identity] [--recursive]
   node scripts/screen.mjs dict:show  [--dict <path>]
   node scripts/screen.mjs dict:prune  --unused <N> [--dict <path>] [--yes]
-  node scripts/screen.mjs selftest`);
+  node scripts/screen.mjs selftest
+
+方向（--direction，缺省 bullish）：
+  bullish  利好档：只保留「利好 + 推理置信度:高」，输出 event-direction-rank-bullish_*.json
+  bearish  利空档：只保留「利空 + 推理置信度:高」，输出 event-direction-rank-bearish_*.json
+  两者共用同一张七档阶梯（最高>非常高>高>中高>中>中低>低）与同一份 shared 同义词词典。`);
 }
 
 function main() {
@@ -1600,14 +1787,22 @@ function main() {
   }
   const args = parseArgs(argv.slice(1));
   const dict = args.dict ? path.resolve(args.dict) : defaultDictPath();
+  const profile = resolveProfile(args.direction);
 
   switch (command) {
     case "inventory": {
       const input = requireOpt(args, "input");
+      // 默认清单落到「输入目录同级」的方向目录，与 rank 的落位口径一致：
+      // 输入是目录 → 取其父目录；输入是文件 → 取其所在目录的父目录。
+      const inputAbs = path.resolve(input);
+      const inputIsDir = fs.existsSync(inputAbs) && fs.statSync(inputAbs).isDirectory();
+      const base = inputIsDir
+        ? path.resolve(inputAbs, "..")
+        : path.resolve(path.dirname(inputAbs), "..");
       const inventoryOut = args.out
         ? path.resolve(args.out)
-        : path.resolve(path.dirname(path.resolve(input)), "..", "event-direction-rank", "inventory.json");
-      return cmdInventory({ input, recursive: !!args.recursive, dict, inventoryOut });
+        : path.join(base, profile.dirName, "inventory.json");
+      return cmdInventory({ input, recursive: !!args.recursive, dict, inventoryOut, profile });
     }
     case "rank": {
       const input = requireOpt(args, "input");
@@ -1615,6 +1810,7 @@ function main() {
         input,
         recursive: !!args.recursive,
         dict,
+        profile,
         canonical: args.canonical ?? null,
         out: args.out ?? null,
         stdout: !!args.stdout,

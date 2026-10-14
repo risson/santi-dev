@@ -18,7 +18,7 @@ description: >-
   触发关键词：细分产业方向、时效性、时效性排序、主叙事、叙事落地时间、短期中期长期、产业链瓶颈、
   产业链层级、产品属性、耗材、市场规模档位、万亿级、千亿级、百亿级、事件驱动、受益程度排序、
   timeliness ranking、industry segment narrative screening
-version: 1.0.0
+version: 1.1.0
 ---
 
 # 细分方向时效性排序（santi-3-timeliness-rank）
@@ -182,7 +182,9 @@ node <技能目录>/scripts/timeliness-rank.mjs aggregate \
 1. 把文件集合里所有文件的 `细分产业方向[].排序逻辑` **重新汇总**（同方向七档计数相加），
    输出 `event-aggregate_<日期>.json/.md`（结构沿用 `daily-event-direction-screen` 的输出规范）。
 2. 兼容输入：文件含 `影响环节[]`（event-chain-navigator 原始输出）时，按 §3.2–§3.5 现场分级；
-   两形态都不是 → 跳过该文件并记 `W_SKIPPED_FILE`；全无可用形态 → `E_NO_SORTLOGIC_FIELD`。
+   顶层 `方向口径 = 利空`（`daily-event-direction-screen --direction bearish` 的结果）→ 跳过该文件并记
+   `W_SKIPPED_BEARISH_DIRECTION`（利空不可计入受益程度）；两形态都不是 → 跳过并记 `W_SKIPPED_FILE`；
+   全无可用形态 → `E_NO_SORTLOGIC_FIELD`。
 3. 名称归并：以用户方向列表为准；未命中用户列表时可经 `--canonical` 或**只读**共享词典映射，
    仍无法映射 → `W_UNMATCHED_SOURCE_DIRECTION` 并忽略该条（不静默并入）。
 4. 把汇总结果并入 Step 4 的 `事件驱动.排序逻辑`，并给第二步的表增加一列：
@@ -270,7 +272,11 @@ node <技能目录>/scripts/timeliness-rank.mjs rank --input <inventory.json> \
 `W_PROXY_DOWNGRADED`、`W_TIER_MISSING`、`W_TIER_CONFLICT`、`W_NO_EVENT_EVIDENCE`、
 `W_NARRATIVE_UNRESOLVED`、`W_LONG_TERM_ELIMINATED`、`W_CONFIDENCE_UPGRADED`、
 `W_UNMATCHED_SOURCE_DIRECTION`、`W_DIRECTION_NOT_IN_SOURCES`、`W_TIE_EXTENDED_TOP`、
-`W_FIELD_RECOMPUTED`、`W_SKIPPED_FILE`、`W_MISSING_FIELD`、`W_UNCLASSIFIED_ROW`、`W_DUPLICATE_DROPPED`。
+`W_FIELD_RECOMPUTED`、`W_SKIPPED_FILE`、`W_SKIPPED_BEARISH_DIRECTION`、`W_MISSING_FIELD`、
+`W_UNCLASSIFIED_ROW`、`W_DUPLICATE_DROPPED`。
+
+> `W_SKIPPED_BEARISH_DIRECTION`：输入件顶层 `方向口径 = 利空`，已按设计跳过、不计入「事件驱动受益程度」。
+> 若本次并未打算混入利空结果，说明文件集合里混进了 `event-direction-rank-bearish_*.json`，应清理集合。
 
 ---
 
@@ -306,3 +312,4 @@ node <技能目录>/scripts/timeliness-rank.mjs rank --input <inventory.json> \
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | 1.0.0 | 2026-10-14 | 首次发布。三段流水线（主叙事时效判断 → 市场规模档位+产业链层级抽取 → 事件驱动七档重汇总）与三键排序、Top 5 并排扩展结论；7 列固定主表 + 附录 A–E；`extract` / `aggregate` / `validate` / `rank` / `selftest` 五个子命令与错误码、警告码表；单位换算与近似 `偏大` 向下取一档；长期淘汰仅在置信度达标时生效（缺失/低置信一律保留）；事件形态兼容 `排序逻辑` 与 `影响环节[]`，现场分级与上游 `daily-event-direction-screen` 逐行一致；69 项自测断言 |
+| 1.1.0 | 2026-10-14 | 新增方向守卫：`aggregate`/`rank` 遇到顶层 `方向口径 = 利空` 的输出件（上游 `daily-event-direction-screen --direction bearish`）一律跳过并记 `W_SKIPPED_BEARISH_DIRECTION`，避免利空口径被求和进「事件驱动受益程度」；无 `方向口径` 的旧文件按利好口径继续处理（向后兼容）；新增 `tests/fixtures/bearish-sources/` 与对应断言（全利空 → `E_NO_SORTLOGIC_FIELD`；与利好混扫 → 只跳利空、计数不受污染）；70 项自测断言 |

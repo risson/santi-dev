@@ -902,6 +902,19 @@ function aggregateFiles(opts) {
       warnings.add("W_SKIPPED_FILE", err.message, relPath(file));
       continue;
     }
+    // 利空口径输出件（daily-event-direction-screen --direction bearish）不得计入「事件驱动受益程度」。
+    const directionTag = normalizeDirectionField(
+      doc["方向口径"] ?? (isObj(doc.meta) ? doc.meta["方向口径"] : null)
+    );
+    if (directionTag === "利空") {
+      skipped.push({
+        文件: relPath(file),
+        原因码: "W_SKIPPED_BEARISH_DIRECTION",
+        说明: "利空口径输出件（方向口径=利空），不计入事件驱动受益程度",
+      });
+      warnings.add("W_SKIPPED_BEARISH_DIRECTION", "跳过利空口径输出件", relPath(file));
+      continue;
+    }
     const sortList = Array.isArray(doc.细分产业方向) ? doc.细分产业方向 : null;
     const hasSortLogic = sortList && sortList.some((it) => isObj(it) && isObj(it.排序逻辑));
     const hasImpact = Array.isArray(doc.影响环节);
@@ -1954,6 +1967,18 @@ function cmdSelftest(verbose) {
     }
     expectEq(out.细分产业方向[0].细分产业方向, "高端电池制造装备", "排序首项（最高1/非常高2）");
     expectEq(out.细分产业方向[1].细分产业方向, "钠离子电池材料", "排序次项（最高1）");
+  });
+  check("aggregateFiles 跳过利空口径件（方向口径=利空）", () => {
+    const bearishDir = path.join(FIX, "bearish-sources");
+    expectCode(() => aggregateFiles({ input: bearishDir }), "E_NO_SORTLOGIC_FIELD", "全利空 → 阻断");
+    const mixed = aggregateFiles({ input: `${path.join(FIX, "event-sources")},${bearishDir}` });
+    expectTrue(hasCode(mixed.warnings, "W_SKIPPED_BEARISH_DIRECTION"), "利空件应留痕");
+    expectEq(mixed.meta.跳过的文件.length, 1, "跳过计数");
+    const byName = Object.fromEntries(mixed.细分产业方向.map((d) => [d.细分产业方向, d.排序逻辑]));
+    for (const [name, counts] of Object.entries(EXPECTED.aggregate)) {
+      expectEq(byName[name], counts, `${name} 计数不受利空件污染`);
+    }
+    expectEq(byName["利空对照方向"], undefined, "利空件方向不得进入结果");
   });
   check("aggregateFiles --directions 补零 + W_NO_EVENT_EVIDENCE", () => {
     const out = aggregateFiles({ input: path.join(FIX, "event-sources"), directions: "固态电解质材料,无证据方向" });

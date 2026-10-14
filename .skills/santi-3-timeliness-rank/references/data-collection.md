@@ -127,6 +127,11 @@ wind_probe:
 文件集合应声明用于「事件驱动时效识别」，内容为 `daily-event-direction-screen` 的结果 JSON
 （含 `细分产业方向[].排序逻辑`）或其原始 `影响环节[]`。直接走脚本 `aggregate`，不联网。
 
+> **只喂利好口径件**：`daily-event-direction-screen --direction bearish` 产出的
+> `event-direction-rank-bearish_*.json` 顶层带 `方向口径: "利空"`，代表**受损方向**，
+> 与「事件驱动受益程度」语义相反。脚本会自动跳过这类文件并记 `W_SKIPPED_BEARISH_DIRECTION`；
+> 但仍应在给集合时就把利好结果目录与利空结果目录分开（默认目录已按方向隔离）。
+
 ### 3.2 用户未给文件集合（按用户确认的兜底）
 
 1. **先问一次**是否补取；用户拒绝 → 全部方向事件列计 `0` + `W_NO_EVENT_EVIDENCE`，继续出表。
