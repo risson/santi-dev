@@ -133,7 +133,7 @@
 
 - `订单`：`{ 口径 ∈ {新签订单, 在手订单, 合同金额}, 本期值{value,unit,currency}, 上年同期值{...}, 同比(number), 期间, 主体, source, confidence, dual_query{current,history,merged}, precision }`
 - `预收款`：`{ 口径, 本期值, 上年同期值, 同比, 报告期, 主体, source, confidence, dual_query{current,history,merged}, precision }`
-- `扩产公告`：`{ 数量(integer≥0), 是否≥2可核验(boolean), 窗口{起,止}, 关键词[], source, confidence, precision }`
+- `扩产公告`：`{ 数量(integer≥0), 是否≥1可核验(boolean), 窗口{起,止}, 关键词[], source, confidence, precision }`
 
 **脚本按以下公式重算**（不信任输入值）：
 
@@ -141,7 +141,7 @@
 归属事件数 = 去重后「判为属于且投资金额非 null」的事件数
 合计金额   = Σ 上述事件金额（统一人民币亿元，保留 2 位小数）
 覆盖率     = 金额可得事件数 ÷ 判为属于的事件数（分母为 0 时记 1.0）
-命中项     = { 订单同比 > 0.20, 预收款同比 > 0.15, 扩产公告.数量 > 1 } 中为真的子项
+命中项     = { 订单同比 > 0.20, 预收款同比 > 0.15, 扩产公告.数量 > 0 } 中为真的子项
 置信度(落地) = min(订单.置信度, 预收款.置信度, 扩产公告.置信度)；null 项按「低」
 ```
 

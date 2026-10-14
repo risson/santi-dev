@@ -58,7 +58,7 @@ const CATALOG_REL = path.join("shared", CATALOG_NAME);
 const CATALOG_DEFAULT = CATALOG_CANDIDATES[0];
 
 const SKILL_NAME = "santi-2-feasibility-screen";
-const SKILL_VERSION = "1.0.0";
+const SKILL_VERSION = "1.1.0";
 const DEFAULT_OUT_DIR = "feasibility-screen";
 
 const CONFIDENCE_LEVELS = ["高", "中", "低"];
@@ -88,7 +88,7 @@ const THIRD_PARTY_HINTS = [
 // 阈值（严格大于；与 references/elimination-rules.md 保持一致）
 const ORDER_YOY_MIN = 0.2; // > 20%
 const PREPAY_YOY_MIN = 0.15; // > 15%
-const EXPAND_MIN = 1; // > 1 起
+const EXPAND_MIN = 0; // > 0 起（数量 ≥1 即命中）
 const CAPITAL_MIN_EVENTS = 3; // >= 3 起
 const CAPITAL_MIN_AMOUNT = 10; // >= 10 亿元人民币
 
@@ -753,12 +753,12 @@ function validateEntry(entry, index, doc, ctx) {
         if (cnt === null || cnt < 0 || !Number.isInteger(cnt)) {
           errors.add("E_SCHEMA", `${label}.数量 应为非负整数`);
         }
-        if (typeof exp["是否≥2可核验"] !== "boolean") {
-          errors.add("E_SCHEMA", `${label}.是否≥2可核验 应为布尔`);
-        } else if (cnt !== null && exp["是否≥2可核验"] !== cnt > EXPAND_MIN) {
+        if (typeof exp["是否≥1可核验"] !== "boolean") {
+          errors.add("E_SCHEMA", `${label}.是否≥1可核验 应为布尔`);
+        } else if (cnt !== null && exp["是否≥1可核验"] !== cnt > EXPAND_MIN) {
           errors.add(
             "E_SCHEMA",
-            `${label}.是否≥2可核验 与 数量 ${cnt} 不一致`,
+            `${label}.是否≥1可核验 与 数量 ${cnt} 不一致`,
           );
         }
         if (!Array.isArray(exp.关键词) || !exp.关键词.length) {
@@ -968,7 +968,7 @@ function evaluateLanding(entry, ctx) {
   if (l.扩产公告) {
     warnings.add(
       "W_ANNOUNCEMENT_TOPK_LIMITED",
-      "扩产公告计数基于公告检索（top_k 限制），为「≥2 起」布尔判定而非精确总数",
+      "扩产公告计数基于公告检索（top_k 限制），为「≥1 起」布尔判定而非精确总数",
       name,
     );
   }
@@ -1043,7 +1043,7 @@ function buildResult(entry, ctx) {
       : str(l.扩产公告.precision) === "近似"
         ? "未命中（近似口径已向下修正）"
         : num(l.扩产公告.数量) > EXPAND_MIN
-          ? `≥2（置信度：${l.扩产公告.confidence}，非精确总数）`
+          ? `≥${num(l.扩产公告.数量)}（置信度：${l.扩产公告.confidence}，非精确总数）`
           : `${num(l.扩产公告.数量)}（置信度：${l.扩产公告.confidence}）`;
 
   const 备注 = [];
@@ -1517,7 +1517,7 @@ function makeEntry(name, over = {}) {
     },
     扩产公告: {
       数量: 2,
-      "是否≥2可核验": true,
+      "是否≥1可核验": true,
       窗口: { 起: "2025-10-14", 止: "2026-10-13" },
       关键词: ["扩产", "扩能", "新建产能"],
       source: { type: "公司公告", detail: "扩产公告2条（标题+日期可核验）", year: "2026" },
@@ -1736,7 +1736,7 @@ function cmdSelftest() {
   });
 
   // ── Gate L
-  t("L：三项阈值全部严格大于（20%/15%/1）", () => {
+  t("L：三项阈值均严格大于（20%/15%/0）", () => {
     const e = makeEntry("方向W");
     e.企业落地.订单.本期值 = { value: 120, unit: "亿元", currency: "CNY" };
     e.企业落地.订单.上年同期值 = { value: 100, unit: "亿元", currency: "CNY" };
@@ -1745,19 +1745,60 @@ function cmdSelftest() {
     e.企业落地.预收款.上年同期值 = { value: 100, unit: "亿元", currency: "CNY" };
     e.企业落地.预收款.同比 = 0.15;
     e.企业落地.扩产公告.数量 = 1;
-    e.企业落地.扩产公告["是否≥2可核验"] = false;
+    e.企业落地.扩产公告["是否≥1可核验"] = true;
     const r = runPipeline(baseDoc({ 细分方向: [e] }));
     expectEqual(
       [r.rows[0].要素明细.企业落地.命中项, r.rows[0].结论, r.淘汰清单.length && r.淘汰清单[0].剔除原因],
-      [[], "淘汰", "E3_LANDING_INSUFFICIENT"],
+      [["扩产公告"], "淘汰", "E3_LANDING_INSUFFICIENT"],
       "L-strict",
       A,
     );
   });
-  t("L：置信度高且命中 2 项 → 通过", () => {
-    const e = makeEntry("方向X", { 企业落地: { 扩产公告: { 数量: 1, "是否≥2可核验": false } } });
+  t("L：置信度高且命中恰 2 项（含扩产 1 起）→ 通过", () => {
+    const e = makeEntry("方向X", { 企业落地: { 扩产公告: { 数量: 1, "是否≥1可核验": true } } });
+    e.企业落地.订单.本期值 = { value: 120, unit: "亿元", currency: "CNY" };
+    e.企业落地.订单.上年同期值 = { value: 100, unit: "亿元", currency: "CNY" };
+    e.企业落地.订单.同比 = 0.2;
     const r = runPipeline(baseDoc({ 细分方向: [e] }));
-    expectEqual(r.rows[0].结论, "通过", "L-two-hits", A);
+    expectEqual(
+      [r.rows[0].要素明细.企业落地.命中项, r.rows[0].结论],
+      [["预收款", "扩产公告"], "通过"],
+      "L-two-hits",
+      A,
+    );
+  });
+  t("L：扩产公告 数量 == 1 → 命中（> 0 起）", () => {
+    const e = makeEntry("方向X1", { 企业落地: { 扩产公告: { 数量: 1, "是否≥1可核验": true } } });
+    e.企业落地.订单.本期值 = { value: 100, unit: "亿元", currency: "CNY" };
+    e.企业落地.订单.上年同期值 = { value: 100, unit: "亿元", currency: "CNY" };
+    e.企业落地.订单.同比 = 0;
+    e.企业落地.预收款.本期值 = { value: 100, unit: "亿元", currency: "CNY" };
+    e.企业落地.预收款.上年同期值 = { value: 100, unit: "亿元", currency: "CNY" };
+    e.企业落地.预收款.同比 = 0;
+    const r = runPipeline(baseDoc({ 细分方向: [e] }));
+    expectEqual(
+      [r.rows[0].要素明细.企业落地.命中项, r.rows[0].结论],
+      [["扩产公告"], "淘汰"],
+      "L-expand-one",
+      A,
+    );
+  });
+  t("L：扩产公告 数量 == 0 → 未命中", () => {
+    const e = makeEntry("方向X2", { 企业落地: { 扩产公告: { 数量: 0, "是否≥1可核验": false } } });
+    e.企业落地.订单.本期值 = { value: 100, unit: "亿元", currency: "CNY" };
+    e.企业落地.订单.上年同期值 = { value: 100, unit: "亿元", currency: "CNY" };
+    e.企业落地.订单.同比 = 0;
+    const r = runPipeline(baseDoc({ 细分方向: [e] }));
+    expectEqual(
+      [r.rows[0].要素明细.企业落地.命中项.includes("扩产公告"), r.rows[0].结论],
+      [false, "淘汰"],
+      "L-expand-zero",
+      A,
+    );
+  });
+  t("L：扩产公告 是否≥1可核验 与数量不一致 → E_SCHEMA", () => {
+    const e = makeEntry("方向X3", { 企业落地: { 扩产公告: { 数量: 1, "是否≥1可核验": false } } });
+    expectThrows("L-expand-flag", "E_SCHEMA", () => runPipeline(baseDoc({ 细分方向: [e] })));
   });
   t("L：置信度中且命中 3 项 → 仍淘汰", () => {
     const e = makeEntry("方向Y", { 企业落地: { 订单: { confidence: "中" } } });
