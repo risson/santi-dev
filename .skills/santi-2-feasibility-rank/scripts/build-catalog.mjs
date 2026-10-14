@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * santi-2-feasibility-screen / scripts/build-catalog.mjs
+ * santi-2-feasibility-rank / scripts/build-catalog.mjs
  *
  * 构建《产业结构调整指导目录》本地机器可读文档：
  *   官方公报 HTML → 清洗归一 → 结构校验 → （官方 OFD 附件交叉校验）→ 写入 shared/

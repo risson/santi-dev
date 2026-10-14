@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * santi-2-feasibility-screen / scripts/feasibility-screen.mjs
+ * santi-2-feasibility-rank / scripts/feasibility-rank.mjs
  *
  * 读取「细分方向取数中间产物」inventory.json，按 references/elimination-rules.md
  * 做三关判定（政策支持度 / 产业资本投入 / 企业落地证据），按 references/data-schema.md
@@ -10,12 +10,12 @@
  * LLM 不参与心算。
  *
  * 用法：
- *   node scripts/feasibility-screen.mjs validate --input <inventory.json>
- *   node scripts/feasibility-screen.mjs screen   --input <inventory.json>
+ *   node scripts/feasibility-rank.mjs validate --input <inventory.json>
+ *   node scripts/feasibility-rank.mjs rank     --input <inventory.json>
  *                                                [--out <目录>] [--stdout]
  *                                                [--run-date YYYY-MM-DD]
- *   node scripts/feasibility-screen.mjs catalog  --terms "<词1>,<词2>" [--catalog <文件>] [--json]
- *   node scripts/feasibility-screen.mjs selftest
+ *   node scripts/feasibility-rank.mjs catalog  --terms "<词1>,<词2>" [--catalog <文件>] [--json]
+ *   node scripts/feasibility-rank.mjs selftest
  *
  * 退出码：0 成功 / 1 业务校验失败 / 2 用法或输入路径错误
  */
@@ -57,9 +57,9 @@ const CATALOG_CANDIDATES = [
 const CATALOG_REL = path.join("shared", CATALOG_NAME);
 const CATALOG_DEFAULT = CATALOG_CANDIDATES[0];
 
-const SKILL_NAME = "santi-2-feasibility-screen";
-const SKILL_VERSION = "1.1.0";
-const DEFAULT_OUT_DIR = "feasibility-screen";
+const SKILL_NAME = "santi-2-feasibility-rank";
+const SKILL_VERSION = "1.2.0";
+const DEFAULT_OUT_DIR = "feasibility-rank";
 
 const CONFIDENCE_LEVELS = ["高", "中", "低"];
 const CONF_RANK = { 高: 0, 中: 1, 低: 2 };
@@ -1171,7 +1171,7 @@ function evaluate(doc, { runDate = null, catalog = null } = {}) {
 function renderMarkdown(result, doc, { dateText }) {
   const L = [];
   const 目录 = doc.meta.目录;
-  L.push(`# 细分方向可实现性筛选（${dateText}）`);
+  L.push(`# 细分方向可实现性排序（${dateText}）`);
   L.push("");
   L.push(
     `- 结论：共 ${result.stats.输入方向数} 个方向：通过 ${result.stats.通过数} / 存疑 ${result.stats.存疑数} / 淘汰 ${result.stats.淘汰数}`,
@@ -1299,8 +1299,8 @@ function cmdCatalog(opts) {
   return 0;
 }
 
-// ─────────────────────────────────────────────────────────── 命令：screen
-function cmdScreen(opts) {
+// ─────────────────────────────────────────────────────────── 命令：rank
+function cmdRank(opts) {
   const doc = loadDoc(opts.input);
   const catalog = loadCatalog(null);
   if (!catalog.存在) {
@@ -1967,11 +1967,11 @@ function requireOpt(args, key) {
 
 function usage() {
   console.log(`用法：
-  node scripts/feasibility-screen.mjs validate --input <inventory.json>
-  node scripts/feasibility-screen.mjs screen   --input <inventory.json> [--out <目录>]
+  node scripts/feasibility-rank.mjs validate --input <inventory.json>
+  node scripts/feasibility-rank.mjs rank     --input <inventory.json> [--out <目录>]
                                                [--stdout] [--run-date YYYY-MM-DD]
-  node scripts/feasibility-screen.mjs catalog  --terms "<词1>,<词2>" [--catalog <文件>] [--json]
-  node scripts/feasibility-screen.mjs selftest
+  node scripts/feasibility-rank.mjs catalog  --terms "<词1>,<词2>" [--catalog <文件>] [--json]
+  node scripts/feasibility-rank.mjs selftest
 
 退出码：0 成功 / 1 业务校验失败 / 2 用法或输入路径错误`);
 }
@@ -1987,8 +1987,8 @@ function main() {
   switch (command) {
     case "validate":
       return cmdValidate({ input: requireOpt(args, "input"), runDate: args["run-date"] ?? null });
-    case "screen":
-      return cmdScreen({
+    case "rank":
+      return cmdRank({
         input: requireOpt(args, "input"),
         out: args.out ?? null,
         stdout: !!args.stdout,

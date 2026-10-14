@@ -1,7 +1,7 @@
 ---
-name: santi-2-feasibility-screen
-name_cn: 细分方向可实现性筛选
-name_en: Industry-Segment Feasibility Screener
+name: santi-2-feasibility-rank
+name_cn: 细分方向可实现性排序
+name_en: Industry-Segment Feasibility Ranker
 description: >-
   给定一个「细分产业方向」列表，用 Wind 数据（wind-mcp-skill）与公开信息检索，逐方向做三关「可实现性」判断并淘汰：
   ①政策支持度（近2年重大政策条目数及级别、是否属《产业结构调整指导目录》鼓励类，
@@ -11,18 +11,18 @@ description: >-
   近12个月扩产公告 >0 起，须置信度为高且至少命中 2 项）。
   每个数据点必须给出源与置信度（高/中/低），数据缺失或置信度为低一律不淘汰而转「存疑」并排尾；
   近似口径不得直接打分（按未命中向下修正）。计数、求和、命中判定、结论与排序由
-  scripts/feasibility-screen.mjs 完成，LLM 只做取数与语义判断。
+  scripts/feasibility-rank.mjs 完成，LLM 只做取数与语义判断。
   触发关键词：细分产业方向、可实现性、政策支持度、产业资本投入、企业落地证据、产业基金投资事件、
   国家产业投资目录、产业结构调整指导目录、订单同比、预收款同比、扩产公告、方向淘汰、
-  feasibility screening、policy support screening、industry fund investment
-version: 1.1.0
+  feasibility ranking、policy support screening、industry fund investment
+version: 1.2.0
 ---
 
-# 细分方向可实现性筛选（santi-2-feasibility-screen）
+# 细分方向可实现性排序（santi-2-feasibility-rank）
 
 ## 核心定位
 
-你是**细分产业方向的可实现性筛选器**。把一批"细分产业方向"放上同一张桌子，用同一口径回答：
+你是**细分产业方向的可实现性排序器**。把一批"细分产业方向"放上同一张桌子，用同一口径回答：
 
 > 哪些方向同时具备「政策支持 + 产业资本真金白银投入 + 龙头企业落地证据」，哪些应当直接淘汰？
 
@@ -35,7 +35,7 @@ version: 1.1.0
 
 **关键原则**：
 
-1. **计数、求和、命中判定、结论与排序全部交给脚本**（`scripts/feasibility-screen.mjs`），LLM 不得心算事件数、金额、同比、命中项数或手工排序。
+1. **计数、求和、命中判定、结论与排序全部交给脚本**（`scripts/feasibility-rank.mjs`），LLM 不得心算事件数、金额、同比、命中项数或手工排序。
 2. **每个数据点必须带来源与置信度**，缺任一项校验直接失败（`E_MISSING_SOURCE` / `E_MISSING_CONFIDENCE`）。
 3. **淘汰需要证据充分**：数据缺失、置信度为低、关键字段不齐 → 一律**不淘汰**，转「存疑」排尾并注明受影响维度。
 4. **近似口径禁止直接打分**：只有偏大/偏小近似口径时，该子项按「未命中」向下修正并写明修正逻辑。
@@ -65,10 +65,10 @@ version: 1.1.0
 | 情形 | 动作 |
 |------|------|
 | 用户已给细分方向列表 | 直接使用；列表里的每个方向作为一条待评估条目 |
-| 用户未给列表 / 列表为空 | **必须提问一次**：`请给出要做可实现性筛选的细分产业方向列表`；不得自行编造方向 |
+| 用户未给列表 / 列表为空 | **必须提问一次**：`请给出要做可实现性排序的细分产业方向列表`；不得自行编造方向 |
 | 用户指定了输出目录 | `--out <该目录>` |
 | 用户说"只打印给我看" | `--stdout`（不落盘） |
-| 用户未提输出方式 | 默认落盘 `<当前工作区根目录>/feasibility-screen/`，落盘后只报路径 + 摘要 |
+| 用户未提输出方式 | 默认落盘 `<当前工作区根目录>/feasibility-rank/`，落盘后只报路径 + 摘要 |
 | 用户指定了汇率 | 写入 `config.fx.usdcny` 并在 `meta.单位与汇率` 注明"用户指定" |
 
 **禁止**写死绝对路径、用户名或平台专有路径（本技能会被分享给他人）；**禁止**写入技能自身目录。
@@ -90,7 +90,7 @@ version: 1.1.0
 3. 目录类别判定一律调用脚本（**不在本地心算、不整篇读目录**）：
 
 ```bash
-node scripts/feasibility-screen.mjs catalog --terms "<方向名>,<同义词>,<上位或下位词>" [--json]
+node scripts/feasibility-rank.mjs catalog --terms "<方向名>,<同义词>,<上位或下位词>" [--json]
 ```
 
 - `--terms` **至少 2 个词**，否则直接失败（`E_CATALOG_TERMS_MISSING`）——这是"穷尽检索"的前提。
@@ -224,10 +224,10 @@ wind_probe:
 
 ```bash
 # 先校验（只读，不产出）
-node scripts/feasibility-screen.mjs validate --input <inventory.json>
+node scripts/feasibility-rank.mjs validate --input <inventory.json>
 
-# 再判定 + 排序 + 落盘（默认写到 <工作区根>/feasibility-screen/）
-node scripts/feasibility-screen.mjs screen --input <inventory.json> \
+# 再判定 + 排序 + 落盘（默认写到 <工作区根>/feasibility-rank/）
+node scripts/feasibility-rank.mjs rank --input <inventory.json> \
   [--out <目录>] [--stdout] [--run-date YYYY-MM-DD]
 ```
 
@@ -266,10 +266,10 @@ node scripts/feasibility-screen.mjs screen --input <inventory.json> \
 |------|------|
 | `build-catalog.mjs [--source <公报URL>] [--html <本地HTML>] [--out <文件>]` | 重建 `shared/` 本地目录文档（新版本发布时用） |
 | `build-catalog.mjs --check [--out <文件>]` | 只读校验本地目录文档结构与元信息 |
-| `feasibility-screen.mjs validate --input <inventory.json>` | 结构与证据校验，只读 |
-| `feasibility-screen.mjs screen --input <inventory.json> [--out <目录>] [--stdout] [--run-date YYYY-MM-DD]` | 三关判定 → 结论 → 排序 → 渲染 → 落盘 |
-| `feasibility-screen.mjs catalog --terms "<词1>,<词2>" [--catalog <文件>] [--json]` | 本地目录文档确定性检索（≥2 检索词） |
-| `feasibility-screen.mjs selftest` | 跑全部断言（三关边界、去重、覆盖率、汇率、近似口径、排序、坏数据拦截、目录检索等 102 项） |
+| `feasibility-rank.mjs validate --input <inventory.json>` | 结构与证据校验，只读 |
+| `feasibility-rank.mjs rank --input <inventory.json> [--out <目录>] [--stdout] [--run-date YYYY-MM-DD]` | 三关判定 → 结论 → 排序 → 渲染 → 落盘 |
+| `feasibility-rank.mjs catalog --terms "<词1>,<词2>" [--catalog <文件>] [--json]` | 本地目录文档确定性检索（≥2 检索词） |
+| `feasibility-rank.mjs selftest` | 跑全部断言（三关边界、去重、覆盖率、汇率、近似口径、排序、坏数据拦截、目录检索等 102 项） |
 
 退出码：`0` 成功 / `1` 业务校验失败 / `2` 用法或输入路径错误。
 
@@ -308,5 +308,6 @@ node scripts/feasibility-screen.mjs screen --input <inventory.json> \
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 1.2.0 | 2026-10-14 | 技能改名：`santi-2-feasibility-screen` → `santi-2-feasibility-rank`；脚本 `feasibility-screen.mjs` → `feasibility-rank.mjs`；CLI 子命令 `screen` → `rank`（不保留别名）；默认输出目录与文件名前缀 `feasibility-screen` → `feasibility-rank`；`name_cn` / `name_en` 同步为「可实现性排序」；三关阈值、错误码/警告码、10 列主表与自测断言（102 项）均不变 |
 | 1.1.0 | 2026-10-14 | 落地关扩产公告阈值下调：`近12个月扩产公告数量 > 1`（≥2 起）改为 `> 0`（≥1 起），`数量 == 1` 由未命中改为**命中**，`== 0` 仍未命中；字段 `企业落地.扩产公告.是否≥2可核验` 随之改名为 `是否≥1可核验`（= `数量 > 0`）；新增边界 fixture `edge-cases/expand-one-announcement.json`（扩产 1 起 + 订单命中 → 恰 2 项 → 通过，旧口径为淘汰），自测断言 96 → 102 项；主表「扩产公告数量」非精确总数写法改为 `≥{n}（置信度：X，非精确总数）`（保留检索到的下界计数，旧版硬编码 `≥2`） |
 | 1.0.0 | 2026-10-13 | 首次发布。三关判定（政策支持度 / 产业资本投入 / 企业落地证据）与阈值淘汰；《产业结构调整指导目录（2024年本）》本地文档 + `catalog` 子命令确定性检索 + 每次运行目录版本体检；Step 2 确认仅走 `web_search`（Wind 无产业基金事件工具，差异表见 references/data-collection.md §1.1）；数据缺失/低置信度一律转「存疑」排尾；近似口径向下修正为未命中；可复算字段由脚本重算；10 列固定主表（9 列 + 结论）+ 证据附录；`build-catalog` / `validate` / `screen` / `catalog` / `selftest` 五个命令与错误码、警告码表；96 项自测断言 |

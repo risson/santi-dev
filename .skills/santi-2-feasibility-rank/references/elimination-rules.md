@@ -1,6 +1,6 @@
 # 三关淘汰与存疑规则（单一真源）
 
-本文件定义 `SKILL.md` Step 2–4 的全部判定：政策支持度（Gate P）、产业资本投入（Gate C）、企业落地证据（Gate L），以及结论聚合与排序。脚本 `scripts/feasibility-screen.mjs` 按本文件实现，`SKILL.md` 与 `references/data-collection.md` 只引用不重复。
+本文件定义 `SKILL.md` Step 2–4 的全部判定：政策支持度（Gate P）、产业资本投入（Gate C）、企业落地证据（Gate L），以及结论聚合与排序。脚本 `scripts/feasibility-rank.mjs` 按本文件实现，`SKILL.md` 与 `references/data-collection.md` 只引用不重复。
 
 **核心原则**：`淘汰` 需要**证据充分**（该关判定置信度达标且关键字段齐备）；**数据缺失或置信度为低一律不淘汰，进入「存疑」并排尾**，同时注明受影响的维度。
 

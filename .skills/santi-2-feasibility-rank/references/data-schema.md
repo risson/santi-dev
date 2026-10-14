@@ -1,8 +1,8 @@
 # 中间数据契约（`inventory.json`）
 
-本文件定义 **LLM 产出的中间数据 JSON** 结构，是 `scripts/feasibility-screen.mjs` 的输入契约。字段名、枚举、单位口径以此为准；脚本按本文件做 `validate`，不合规直接非 0 退出。
+本文件定义 **LLM 产出的中间数据 JSON** 结构，是 `scripts/feasibility-rank.mjs` 的输入契约。字段名、枚举、单位口径以此为准；脚本按本文件做 `validate`，不合规直接非 0 退出。
 
-> 该文件由技能在 Step 5 生成（默认写到 `<输出目录>/inventory.json`），是**中间产物**：便于复核取数过程、支持人工修订后重跑 `screen`，无需重新取数。
+> 该文件由技能在 Step 5 生成（默认写到 `<输出目录>/inventory.json`），是**中间产物**：便于复核取数过程、支持人工修订后重跑 `rank`，无需重新取数。
 
 **两条硬性原则**：
 

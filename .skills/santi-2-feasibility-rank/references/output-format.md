@@ -6,8 +6,8 @@
 {
   "meta": {
     "generated_at": "YYYY-MM-DDTHH:MM:SS+08:00",
-    "技能": "santi-2-feasibility-screen",
-    "技能版本": "1.1.0",
+    "技能": "santi-2-feasibility-rank",
+    "技能版本": "1.2.0",
     "输入文件": "inventory.json",
     "输入方向数": 6,
     "通过数": 2,
@@ -127,8 +127,8 @@
 
 | 项 | 规则 |
 |----|------|
-| 默认目录 | 用户指定 `--out`；未指定 → `<当前工作区根目录>/feasibility-screen/` |
-| 文件名 | `feasibility-screen_<YYYY-MM-DD>.json` 与 `feasibility-screen_<YYYY-MM-DD>.md` |
+| 默认目录 | 用户指定 `--out`；未指定 → `<当前工作区根目录>/feasibility-rank/` |
+| 文件名 | `feasibility-rank_<YYYY-MM-DD>.json` 与 `feasibility-rank_<YYYY-MM-DD>.md` |
 | 中间产物 | `<输出目录>/inventory.json`（Step 5 生成，供复核与重跑） |
 | 编码 | UTF-8 无 BOM，LF 换行，末尾换行；纯 JSON 不包代码块、无前后缀文字 |
 | 同名文件 | 默认覆盖，并在回复中说明覆盖的是哪个路径 |

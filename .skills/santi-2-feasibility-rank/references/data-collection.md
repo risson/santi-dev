@@ -108,7 +108,7 @@
 4. P2 判定调用：
 
 ```bash
-node scripts/feasibility-screen.mjs catalog --terms "<方向名>,<同义词1>,<同义词2>" [--catalog <文件>] [--json]
+node scripts/feasibility-rank.mjs catalog --terms "<方向名>,<同义词1>,<同义词2>" [--catalog <文件>] [--json]
 ```
 
 - `--terms` 至少 2 个词（方向名 + 同义/上位/下位词），少于 2 个直接失败（`E_CATALOG_TERMS_MISSING`）——这是"穷尽检索"的前提。
