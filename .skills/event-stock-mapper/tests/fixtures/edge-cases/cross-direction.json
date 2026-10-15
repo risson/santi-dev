@@ -2,7 +2,7 @@
   "meta": {
     "generated_at": "2026-10-14T20:00:00+08:00",
     "技能": "event-stock-mapper",
-    "技能版本": "1.1.0",
+    "技能版本": "1.2.0",
     "数据来源": [
       "wind-mcp-skill",
       "web_search"
@@ -43,6 +43,9 @@
   "细分方向": [
     {
       "细分产业方向": "固态电解质",
+      "产业链层级": "上游原材料/耗材",
+      "产业链层级来源": "前序结果",
+      "产业链层级来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/santi-3-timeliness-rank_2026-10-14.json",
       "事件标题": "新型电池产业十五五规划",
       "事件日期": "2026-09-28",
       "事件": [
@@ -63,7 +66,7 @@
           "影响定级": "B级",
           "传导强度": "一级传导/中",
           "产业阶段": "技术突破",
-          "产业链层级": "中游制造集成",
+          "产业链层级": "中游制造/集成",
           "来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/event-chain-navigator_固态电池中试线量产进展_2026-10-08.json"
         }
       ],
@@ -529,6 +532,9 @@
     },
     {
       "细分产业方向": "钠离子电池材料",
+      "产业链层级": "上游原材料/耗材",
+      "产业链层级来源": "前序结果",
+      "产业链层级来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/santi-3-timeliness-rank_2026-10-14.json",
       "事件标题": "新型电池产业十五五规划",
       "事件日期": "2026-09-28",
       "事件": [
@@ -549,7 +555,7 @@
           "影响定级": "B级",
           "传导强度": "一级传导/中",
           "产业阶段": "技术突破",
-          "产业链层级": "中游制造集成",
+          "产业链层级": "中游制造/集成",
           "来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/event-chain-navigator_固态电池中试线量产进展_2026-10-08.json"
         }
       ],

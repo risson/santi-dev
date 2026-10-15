@@ -21,13 +21,29 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const SKILL = 'event-stock-mapper';
 
 // 事件载荷字段：命中「事件—影响环节」绑定的最小证据；前序结论文件（santi-3 等）只有方向名，不得当作事件来源
 const EVENT_PAYLOAD_KEYS = ['事件标题', '事件日期', '影响方向', '影响定级', '传导强度', '产业阶段', '产业链层级'];
 // 前序结论文件标志：带 排名 或 结论 的 细分方向[] 属「前序排序结果」，不作为事件来源
 const PRIOR_MARKER_KEYS = ['排名', '结论'];
+
+// 产业链层级四层枚举（与 santi-3-timeliness-rank 的 CHAIN_TIERS 逐字一致，改动需同步）
+const CHAIN_LEVELS = ['上游原材料/耗材', '上游核心零部件/设备', '中游制造/集成', '下游应用', '未标注'];
+const CHAIN_LEVEL_UNKNOWN = '未标注';
+// 上游文件的常见变体 → 标准枚举（缺斜杠、别名写法）；归一结果永不把非枚举文本写进表格
+const CHAIN_LEVEL_ALIASES = {
+  上游原材料耗材: '上游原材料/耗材',
+  上游核心零部件设备: '上游核心零部件/设备',
+  '上游设备/零部件': '上游核心零部件/设备',
+  上游设备零部件: '上游核心零部件/设备',
+  '上游零部件/设备': '上游核心零部件/设备',
+  中游制造集成: '中游制造/集成',
+  中游组装集成: '中游制造/集成',
+  中游集成: '中游制造/集成',
+  下游: '下游应用',
+};
 
 const TIER_CORE = '核心受益';
 const TIER_MID = '次要受益';
@@ -84,6 +100,8 @@ const W = {
   BINDING_NOT_PROVIDED: 'W_BINDING_NOT_PROVIDED',
   EVENT_BINDING_MISMATCH: 'W_EVENT_BINDING_MISMATCH',
   EVENT_PAYLOAD_EMPTY: 'W_EVENT_PAYLOAD_EMPTY',
+  CHAIN_LEVEL_NORMALIZED: 'W_CHAIN_LEVEL_NORMALIZED',
+  CHAIN_LEVEL_CONFLICT: 'W_CHAIN_LEVEL_CONFLICT',
 };
 
 class SkillError extends Error {
@@ -110,6 +128,52 @@ function str(value) {
 
 function isNonEmptyString(value) {
   return str(value).length > 0;
+}
+
+/**
+ * 产业链层级归一：变体 → 四层标准枚举。
+ * @param {string} raw 原文（可空）
+ * @param {Array} warnings 警告收集数组（可空）
+ * @param {{对象?: string, 严格?: boolean}} options 严格=true 时非法值抛 E_SCHEMA（用于方向级声明值）
+ * @returns {{值: string, 原值: string, 是否改写: boolean}}
+ */
+function normalizeChainLevel(raw, warnings = null, options = {}) {
+  const 对象 = options.对象 ?? '';
+  const 严格 = options.严格 === true;
+  const original = str(raw);
+  if (!original) return { 值: CHAIN_LEVEL_UNKNOWN, 原值: '', 是否改写: false };
+  if (CHAIN_LEVELS.includes(original)) return { 值: original, 原值: '', 是否改写: false };
+
+  const squeezed = original.replace(/[\s/]/g, '');
+  const aliasHit = CHAIN_LEVEL_ALIASES[original]
+    ?? CHAIN_LEVEL_ALIASES[squeezed]
+    ?? CHAIN_LEVELS.find((level) => level.replace(/[\s/]/g, '') === squeezed)
+    ?? '';
+  if (aliasHit) {
+    if (warnings) {
+      warnings.push({
+        码: W.CHAIN_LEVEL_NORMALIZED,
+        说明: `产业链层级「${original}」归一为「${aliasHit}」`,
+        对象,
+      });
+    }
+    return { 值: aliasHit, 原值: original, 是否改写: true };
+  }
+
+  if (严格) {
+    throw new SkillError(
+      E.SCHEMA,
+      `${对象 || '方向'} 产业链层级 非法：${original}（允许 ${CHAIN_LEVELS.join(' / ')}，变体请写标准写法）`,
+    );
+  }
+  if (warnings) {
+    warnings.push({
+      码: W.CHAIN_LEVEL_NORMALIZED,
+      说明: `产业链层级「${original}」不在四层枚举内，已置为「${CHAIN_LEVEL_UNKNOWN}」`,
+      对象,
+    });
+  }
+  return { 值: CHAIN_LEVEL_UNKNOWN, 原值: original, 是否改写: true };
 }
 
 function compareCode(a, b) {
@@ -346,7 +410,7 @@ function extractPassedDirections(data) {
     const name = pickField(item, DIRECTION_KEYS);
     if (!name) continue;
     const verdict = str(item?.['结论']);
-    if (verdict === '通过') passed.push({ name, rank: item?.['排名'] ?? null });
+    if (verdict === '通过') passed.push({ name, rank: item?.['排名'] ?? null, chainLevelRaw: str(item?.['产业链层级']) });
     else skipped.push({ name, verdict: verdict || '未标注' });
   }
   return { passed, skipped };
@@ -358,6 +422,7 @@ function collectDirectionsFromMarkdown(text, file) {
     const dirKey = table.headers.find((h) => DIRECTION_KEYS.includes(h));
     if (!dirKey) continue;
     const verdictKey = table.headers.find((h) => h === '结论');
+    const chainKey = table.headers.find((h) => h === '产业链层级');
     for (const row of table.rows) {
       const name = str(row[dirKey]);
       if (!name || name === '细分产业方向') continue;
@@ -365,6 +430,7 @@ function collectDirectionsFromMarkdown(text, file) {
         name,
         file: relFromCwd(file),
         verdict: verdictKey ? str(row[verdictKey]) : '',
+        chainLevelRaw: chainKey ? str(row[chainKey]) : '',
       });
     }
   }
@@ -438,7 +504,7 @@ function loadPriorPassed(targets) {
         skippedFiles.push({ file: relFromCwd(file), reason: '非 santi-3 结果形态（无 细分方向[]）' });
         continue;
       }
-      for (const item of result.passed) passed.push({ name: item.name, file: relFromCwd(file) });
+      for (const item of result.passed) passed.push({ name: item.name, file: relFromCwd(file), chainLevelRaw: item.chainLevelRaw ?? '' });
       for (const item of result.skipped) skippedDirections.push({ name: item.name, verdict: item.verdict, file: relFromCwd(file) });
     } else if (ext === '.md' || ext === '.markdown') {
       const text = readTextSafe(file);
@@ -454,7 +520,7 @@ function loadPriorPassed(targets) {
         continue;
       }
       for (const r of withVerdict) {
-        if (r.verdict === '通过') passed.push({ name: r.name, file: r.file });
+        if (r.verdict === '通过') passed.push({ name: r.name, file: r.file, chainLevelRaw: r.chainLevelRaw ?? '' });
         else skippedDirections.push({ name: r.name, verdict: r.verdict, file: r.file });
       }
     } else {
@@ -476,6 +542,20 @@ function parseDirectionsArg(raw) {
 function requireObject(value, label) {
   if (!isPlainObject(value)) throw new SkillError(E.SCHEMA, `${label} 必须是对象`);
   return value;
+}
+
+/** 按内容去重追加警告（同一层级在同一方向只留一条归一/冲突记录，避免多事件重复刷屏） */
+function pushWarningDedup(warnings, warning) {
+  const dup = warnings.some((w) => w['码'] === warning['码'] && w['说明'] === warning['说明'] && (w['对象'] ?? '') === (warning['对象'] ?? ''));
+  if (!dup) warnings.push(warning);
+}
+
+/** 归一 + 按内容去重；返回 {值, 原值, 是否改写} */
+function normalizeChainLevelDedup(raw, warnings, options = {}) {
+  const drafts = [];
+  const result = normalizeChainLevel(raw, drafts, options);
+  for (const warning of drafts) pushWarningDedup(warnings, warning);
+  return result;
 }
 
 function requireArray(value, label) {
@@ -575,6 +655,8 @@ function normalizeBindingEvents(rawEvents) {
       传导强度: str(e['传导强度']),
       产业阶段: str(e['产业阶段']),
       产业链层级: str(e['产业链层级']),
+      产业链层级原值: str(e['产业链层级原值']),
+      产业链层级来源: str(e['产业链层级来源']),
       来源文件: str(e['来源文件']),
     }))
     .filter((e) => EVENT_PAYLOAD_KEYS.some((key) => e[key]));
@@ -602,7 +684,15 @@ function readBindingEntries(rawBinding) {
         来源文件: Array.isArray(item['来源文件']) ? item['来源文件'].map((f) => str(f)).join('；') : str(item['来源文件']),
       });
     }
-    entries.set(name, events);
+    entries.set(name, {
+      事件: events,
+      产业链层级: str(item['产业链层级']),
+      产业链层级原值: str(item['产业链层级原值']),
+      产业链层级来源: str(item['产业链层级来源']),
+      产业链层级来源文件: Array.isArray(item['产业链层级来源文件'])
+        ? item['产业链层级来源文件'].map((f) => str(f)).join('；')
+        : str(item['产业链层级来源文件']),
+    });
   }
   return entries;
 }
@@ -837,6 +927,9 @@ function validateInventory(data, bindingData = null) {
       eventTitle: str(direction['事件标题']),
       eventDate: str(direction['事件日期']),
       events,
+      chainLevelRaw: str(direction['产业链层级']),
+      chainLevelSourceDeclared: str(direction['产业链层级来源']),
+      chainLevelSourceFileDeclared: str(direction['产业链层级来源文件']),
       candidates: pool,
       stocks: normalizedStocks,
       declaredPoolMedian: direction['候选池中位数(亿元)'],
@@ -856,18 +949,20 @@ function validateInventory(data, bindingData = null) {
 
   // 事件—影响环节绑定门禁：绑不到事件的方向整体跳过（其余方向照常出结果）
   const skippedDirections = [];
+  const chainLevels = new Map();
   let active = normalized;
   if (bindingData) {
     const bindings = readBindingEntries(bindingData);
     for (const direction of normalized) {
       const bound = bindings.get(direction.name);
+      const boundEvents = bound?.事件 ?? [];
       const declaredTitle = direction.eventTitle;
       let reason = '';
       if (!bound) reason = declaredTitle ? '未在任何事件文件中命中' : 'binding 中未出现该方向';
-      else if (!bound.length) reason = '事件载荷为空';
+      else if (!boundEvents.length) reason = '事件载荷为空';
       if (!reason) {
         const declared = direction.eventTitle;
-        const boundTitle = bound[0]?.['事件标题'] ?? '';
+        const boundTitle = boundEvents[0]?.['事件标题'] ?? '';
         if (declared && declared !== boundTitle) {
           warnings.push({
             码: W.EVENT_BINDING_MISMATCH,
@@ -875,24 +970,94 @@ function validateInventory(data, bindingData = null) {
             对象: direction.name,
           });
         }
-        direction.events = bound;
+        direction.events = boundEvents;
         direction.eventTitle = boundTitle || declared;
-        direction.eventDate = bound[0]?.['事件日期'] || direction.eventDate;
+        direction.eventDate = boundEvents[0]?.['事件日期'] || direction.eventDate;
         direction.bound = true;
+        // 产业链层级：方向级声明（santi-3/方向清单）> binding 条目层级 > binding 事件[0] 层级 > 未标注
+        const declaredChain = normalizeChainLevelDedup(direction.chainLevelRaw, warnings, { 对象: direction.name, 严格: true });
+        direction.chainLevelRaw = declaredChain.原值;
+        const bindingChain = normalizeChainLevelDedup(bound?.产业链层级 ?? '', warnings, { 对象: direction.name });
+        direction.chainLevelRaw = declaredChain.是否改写 ? declaredChain.原值 : bindingChain.原值;
+        const eventChain = normalizeChainLevelDedup(boundEvents[0]?.['产业链层级'] ?? '', warnings, { 对象: direction.name });
+        if (declaredChain.值 !== CHAIN_LEVEL_UNKNOWN) {
+          direction.chainLevel = declaredChain.值;
+          direction.chainLevelSource = direction.chainLevelSourceDeclared || '方向清单';
+          direction.chainLevelSourceFile = direction.chainLevelSourceFileDeclared;
+        } else if (bindingChain.值 !== CHAIN_LEVEL_UNKNOWN) {
+          direction.chainLevel = bindingChain.值;
+          direction.chainLevelSource = bound?.['产业链层级来源'] || '事件文件';
+          direction.chainLevelSourceFile = bound?.['产业链层级来源文件'] ?? '';
+        } else if (eventChain.值 !== CHAIN_LEVEL_UNKNOWN) {
+          direction.chainLevel = eventChain.值;
+          direction.chainLevelSource = boundEvents[0]?.['产业链层级来源'] || '事件文件';
+          direction.chainLevelSourceFile = boundEvents[0]?.['来源文件'] ?? '';
+        } else {
+          direction.chainLevel = CHAIN_LEVEL_UNKNOWN;
+          direction.chainLevelSource = '未标注';
+          direction.chainLevelSourceFile = '';
+        }
+        const compareTo = bindingChain.值 !== CHAIN_LEVEL_UNKNOWN ? bindingChain.值 : eventChain.值;
+        if (declaredChain.值 !== CHAIN_LEVEL_UNKNOWN && compareTo !== CHAIN_LEVEL_UNKNOWN && declaredChain.值 !== compareTo) {
+          pushWarningDedup(warnings, {
+            码: W.CHAIN_LEVEL_CONFLICT,
+            说明: `产业链层级冲突：声明「${declaredChain.值}」vs 绑定「${compareTo}」，已以声明值为准`,
+            对象: direction.name,
+          });
+        }
       } else {
-        skippedDirections.push({ 细分产业方向: direction.name, 原因: reason, 阶段: 'binding' });
+        const declaredChain = normalizeChainLevelDedup(direction.chainLevelRaw, warnings, { 对象: direction.name, 严格: true });
+        direction.chainLevel = declaredChain.值;
+        direction.chainLevelSource = declaredChain.值 === CHAIN_LEVEL_UNKNOWN ? '未标注' : (direction.chainLevelSourceDeclared || '方向清单');
+        direction.chainLevelRaw = declaredChain.原值;
+        skippedDirections.push({
+          细分产业方向: direction.name,
+          原因: reason,
+          阶段: 'binding',
+          产业链层级: direction.chainLevel,
+        });
         warnings.push({
           码: W.DIRECTION_SKIPPED,
           说明: `未绑定任何事件（${reason}），已跳过该方向`,
           对象: direction.name,
         });
       }
+      chainLevels.set(direction.name, {
+        值: direction.chainLevel ?? CHAIN_LEVEL_UNKNOWN,
+        原值: direction.chainLevelRaw ?? '',
+        来源: direction.chainLevelSource ?? '未标注',
+        来源文件: direction.chainLevelSourceFile ?? '',
+      });
     }
     active = normalized.filter((d) => d.bound === true);
     if (!active.length) {
       throw new SkillError(E.NO_ENTRIES, `全部 ${normalized.length} 个方向均未绑定事件，已跳过：${skippedDirections.map((s) => s['细分产业方向']).join('、')}`);
     }
   } else {
+    for (const direction of normalized) {
+      const declaredChain = normalizeChainLevelDedup(direction.chainLevelRaw, warnings, { 对象: direction.name, 严格: true });
+      const eventChain = normalizeChainLevelDedup(direction.events[0]?.['产业链层级'] ?? '', warnings, { 对象: direction.name });
+      if (declaredChain.值 !== CHAIN_LEVEL_UNKNOWN) {
+        direction.chainLevel = declaredChain.值;
+        direction.chainLevelSource = direction.chainLevelSourceDeclared || '方向清单';
+        direction.chainLevelSourceFile = direction.chainLevelSourceFileDeclared;
+      } else if (eventChain.值 !== CHAIN_LEVEL_UNKNOWN) {
+        direction.chainLevel = eventChain.值;
+        direction.chainLevelSource = '事件文件';
+        direction.chainLevelSourceFile = direction.events[0]?.['来源文件'] ?? '';
+      } else {
+        direction.chainLevel = CHAIN_LEVEL_UNKNOWN;
+        direction.chainLevelSource = '未标注';
+        direction.chainLevelSourceFile = '';
+      }
+      direction.chainLevelRaw = declaredChain.是否改写 ? declaredChain.原值 : eventChain.原值;
+      chainLevels.set(direction.name, {
+        值: direction.chainLevel,
+        原值: direction.chainLevelRaw,
+        来源: direction.chainLevelSource,
+        来源文件: direction.chainLevelSourceFile,
+      });
+    }
     warnings.push({
       码: W.BINDING_NOT_PROVIDED,
       说明: '未提供 --binding，跳过事件绑定校验（结果不含绑定表；建议先跑 extract 并把绑定文件传给 validate/rank）',
@@ -906,6 +1071,7 @@ function validateInventory(data, bindingData = null) {
     directions: active,
     allDirections: normalized,
     skippedDirections,
+    chainLevels,
     bindingChecked: Boolean(bindingData),
     warnings,
     root,
@@ -1145,14 +1311,15 @@ function formatMcapYi(value) {
 
 function renderMainTable(items) {
   const lines = [
-    '| 细分产业方向 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |',
-    '|------|------|------|------|------|------|',
+    '| 细分产业方向 | 产业链层级 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |',
+    '|------|------|------|------|------|------|------|',
   ];
   for (const item of items) {
     const interpretation = isNonEmptyString(item['层级解读'])
       ? str(item['层级解读'])
       : (() => { throw new SkillError(E.SCHEMA, `标的 ${item['股票代码']} 缺少层级解读，主表不得输出空单元格`); })();
-    lines.push(`| ${item['细分产业方向']} | ${item['股票代码']} | ${item['股票名称']} | ${item['流通市值']} | ${item['推荐层级']} | ${interpretation} |`);
+    const chainLevel = isNonEmptyString(item['产业链层级']) ? str(item['产业链层级']) : CHAIN_LEVEL_UNKNOWN;
+    lines.push(`| ${item['细分产业方向']} | ${chainLevel} | ${item['股票代码']} | ${item['股票名称']} | ${item['流通市值']} | ${item['推荐层级']} | ${interpretation} |`);
   }
   return lines.join('\n');
 }
@@ -1223,16 +1390,22 @@ function renderWarnings(warnings) {
   return lines.join('\n');
 }
 
-function renderBindingTable(binding, skipped = []) {
+function renderBindingTable(binding, skipped = [], chainLevels = new Map()) {
   const lines = [
     '### 事件 — 影响环节绑定',
     '',
-    '| 细分产业方向 | 事件标题 | 事件日期 | 影响定级 | 传导强度 | 来源文件 |',
-    '|------|------|------|------|------|------|',
+    '| 细分产业方向 | 产业链层级 | 事件标题 | 事件日期 | 影响定级 | 传导强度 | 来源文件 |',
+    '|------|------|------|------|------|------|------|',
   ];
-  const cell = (value) => (isNonEmptyString(value) ? value : '未标注');
+  const cell = (value) => (isNonEmptyString(value) ? value : CHAIN_LEVEL_UNKNOWN);
+  const levelOf = (name, fallback) => {
+    const hit = chainLevels.get(name);
+    if (hit && isNonEmptyString(hit.值)) return hit.值;
+    return isNonEmptyString(fallback) ? fallback : CHAIN_LEVEL_UNKNOWN;
+  };
   let rows = 0;
   for (const direction of binding) {
+    const directionLevel = levelOf(direction['细分产业方向'], direction['产业链层级']);
     const events = Array.isArray(direction['事件']) && direction['事件'].length
       ? direction['事件']
       : [{
@@ -1240,19 +1413,22 @@ function renderBindingTable(binding, skipped = []) {
         事件日期: direction['事件日期'],
         影响定级: direction['影响定级'],
         传导强度: direction['传导强度'],
+        产业链层级: direction['产业链层级'],
         来源文件: Array.isArray(direction['来源文件']) ? direction['来源文件'].join('；') : direction['来源文件'],
       }];
     for (const e of events) {
       const files = Array.isArray(e['来源文件']) ? e['来源文件'].join('；') : e['来源文件'];
-      lines.push(`| ${direction['细分产业方向']} | ${cell(e['事件标题'])} | ${cell(e['事件日期'])} | ${cell(e['影响定级'])} | ${cell(e['传导强度'])} | ${cell(files)} |`);
+      // 方向名与层级每行复写：每一行都自洽可读（不依赖「合并单元格」，文本解析与表格渲染都稳定）
+      lines.push(`| ${direction['细分产业方向']} | ${directionLevel} | ${cell(e['事件标题'])} | ${cell(e['事件日期'])} | ${cell(e['影响定级'])} | ${cell(e['传导强度'])} | ${cell(files)} |`);
       rows += 1;
     }
   }
   for (const s of skipped) {
-    lines.push(`| ${s['细分产业方向']} | [已跳过] | 未标注 | 未标注 | 未标注 | 跳过原因：${s['原因']} |`);
+    const level = levelOf(s['细分产业方向'], s['产业链层级']);
+    lines.push(`| ${s['细分产业方向']} | ${level} | [已跳过] | 未标注 | 未标注 | 未标注 | 跳过原因：${s['原因']} |`);
     rows += 1;
   }
-  if (!rows) lines.push('| 无 | 未标注 | 未标注 | 未标注 | 未标注 | 无 |');
+  if (!rows) lines.push(`| 无 | ${CHAIN_LEVEL_UNKNOWN} | 未标注 | 未标注 | 未标注 | 未标注 | 无 |`);
   return lines.join('\n');
 }
 
@@ -1268,7 +1444,15 @@ function renderResult(data, validated, markdown) {
   lines.push('');
   lines.push('**市值口径**：流通市值（Wind，元 → 亿元）；弹性 = 该股流通市值 ≤ 同方向候选池流通市值中位数。');
   lines.push('');
-  lines.push(renderBindingTable(data['绑定'] ?? [], skipped));
+  const chainLevels = validated?.chainLevels ?? new Map();
+  // 只统计有效（已绑定）方向：被跳过方向不参与「已标注/未标注」口径
+  const activeNames = new Set((validated?.directions ?? []).map((d) => d.name));
+  const activeLevels = [...chainLevels.entries()].filter(([name]) => activeNames.has(name)).map(([, v]) => v);
+  const chainCounted = activeLevels.filter((v) => isNonEmptyString(v.值) && v.值 !== CHAIN_LEVEL_UNKNOWN).length;
+  const chainMissing = activeLevels.filter((v) => !isNonEmptyString(v.值) || v.值 === CHAIN_LEVEL_UNKNOWN).length;
+  lines.push(`**产业链层级口径**：来自 santi-3「通过」条目或事件文件原文（四层枚举，变体已归一）；有效方向 ${activeLevels.length} 个，已标注 ${chainCounted} 个${chainMissing ? `，未标注 ${chainMissing} 个` : ''}。`);
+  lines.push('');
+  lines.push(renderBindingTable(data['绑定'] ?? [], skipped, chainLevels));
   lines.push('');
   lines.push(renderMainTable(data['标的']));
   lines.push('');
@@ -1291,6 +1475,10 @@ function makeResultItem(direction, stock) {
   const mcapText = formatMcapYi(stock.mcapYi);
   return {
     '细分产业方向': direction.name,
+    '产业链层级': direction.chainLevel ?? CHAIN_LEVEL_UNKNOWN,
+    '产业链层级原值': direction.chainLevelRaw ?? '',
+    '产业链层级来源': direction.chainLevelSource ?? '未标注',
+    '产业链层级来源文件': direction.chainLevelSourceFile ?? '',
     '股票代码': stock.code,
     '股票名称': stock.name,
     '流通市值': mcapText,
@@ -1342,6 +1530,10 @@ function buildResult(validated, { runDate, outputTargets }) {
     }
     directionSummaries.push({
       '细分产业方向': direction.name,
+      '产业链层级': direction.chainLevel ?? CHAIN_LEVEL_UNKNOWN,
+      '产业链层级原值': direction.chainLevelRaw ?? '',
+      '产业链层级来源': direction.chainLevelSource ?? '未标注',
+      '产业链层级来源文件': direction.chainLevelSourceFile ?? '',
       '事件标题': direction.eventTitle,
       '事件日期': direction.eventDate,
       '影响定级': direction.events?.[0]?.['影响定级'] ?? '',
@@ -1410,6 +1602,10 @@ function buildResult(validated, { runDate, outputTargets }) {
     方向摘要: directionSummaries,
     绑定: directionSummaries.map((d) => ({
       细分产业方向: d['细分产业方向'],
+      产业链层级: d['产业链层级'],
+      产业链层级原值: d['产业链层级原值'],
+      产业链层级来源: d['产业链层级来源'],
+      产业链层级来源文件: d['产业链层级来源文件'],
       事件标题: d['事件标题'],
       事件日期: d['事件日期'],
       影响定级: d['影响定级'],
@@ -1448,7 +1644,13 @@ function cmdExtract(argv) {
     for (const item of fromFile) {
       const name = typeof item === 'string' ? str(item) : pickField(item, DIRECTION_KEYS);
       if (!name) throw new SkillError(E.SCHEMA, `${directionsFile} 中存在缺少方向名的条目`);
-      given.push({ name, eventTitle: str(item?.['事件标题']), eventDate: str(item?.['事件日期']) });
+      given.push({
+        name,
+        eventTitle: str(item?.['事件标题']),
+        eventDate: str(item?.['事件日期']),
+        chainLevelRaw: str(item?.['产业链层级']),
+        chainLevelSourceFile: relFromCwd(path.resolve(directionsFile)),
+      });
     }
   }
 
@@ -1465,7 +1667,7 @@ function cmdExtract(argv) {
       throw new SkillError(E.PRIOR_SHAPE_UNKNOWN, '未在 --from-prior 输入中找到「结论=通过」的方向（请确认是 santi-3-timeliness-rank 结果）');
     }
     source = 'prior:passed';
-    directionNames = prior.passed.map((p) => ({ name: p.name, file: p.file }));
+    directionNames = prior.passed.map((p) => ({ name: p.name, file: p.file, chainLevelRaw: p.chainLevelRaw ?? '', chainLevelSourceFile: p.file }));
     priorSkipped = prior.skippedDirections;
   } else {
     throw new SkillError(E.DIRECTIONS_MISSING, '必须提供 --directions / --directions-file / --from-prior 之一', 2);
@@ -1519,9 +1721,38 @@ function cmdExtract(argv) {
     if (bucket && !eventTitle) {
       warnings.push({ 码: W.EVENT_PAYLOAD_EMPTY, 说明: '方向命中事件文件但事件标题为空，绑定不可用', 对象: entry.name });
     }
+    // 产业链层级透传：santi-3 / 方向清单声明优先，回退绑定事件 事件[0]，再无则「未标注」（宽松归一 + 留痕）
+    const declaredChain = normalizeChainLevelDedup(entry.chainLevelRaw, warnings, { 对象: entry.name });
+    const eventChain = normalizeChainLevelDedup(first?.['产业链层级'], warnings, { 对象: entry.name });
+    const chainLevel = declaredChain.值 !== CHAIN_LEVEL_UNKNOWN ? declaredChain.值 : eventChain.值;
+    const chainLevelRaw = declaredChain.是否改写
+      ? declaredChain.原值
+      : (eventChain.是否改写 ? eventChain.原值 : '');
+    const chainLevelSource = declaredChain.值 !== CHAIN_LEVEL_UNKNOWN
+      ? (source === 'prior:passed' ? '前序结果' : '方向清单')
+      : (eventChain.值 !== CHAIN_LEVEL_UNKNOWN ? '事件文件' : '未标注');
+    const chainLevelSourceFile = chainLevelSource === '前序结果' || chainLevelSource === '方向清单'
+      ? (entry.chainLevelSourceFile ?? entry.file ?? '')
+      : (chainLevelSource === '事件文件' ? (first?.file ?? '') : '');
+    if (
+      declaredChain.值 !== CHAIN_LEVEL_UNKNOWN
+      && eventChain.值 !== CHAIN_LEVEL_UNKNOWN
+      && declaredChain.值 !== eventChain.值
+    ) {
+      warnings.push({
+        码: W.CHAIN_LEVEL_CONFLICT,
+        说明: `产业链层级冲突：声明「${declaredChain.值}」vs 事件「${eventChain.值}」，已以声明值为准`,
+        对象: entry.name,
+      });
+    }
+
     if (events.length) {
       bindings.push({
         细分产业方向: entry.name,
+        产业链层级: chainLevel,
+        产业链层级原值: chainLevelRaw,
+        产业链层级来源: chainLevelSource,
+        产业链层级来源文件: chainLevelSourceFile,
         事件标题: eventTitle,
         事件日期: eventDate,
         影响定级: first?.['影响定级'] ?? '',
@@ -1534,13 +1765,16 @@ function cmdExtract(argv) {
     directions.push({
       排名: directions.length + 1,
       细分产业方向: entry.name,
+      产业链层级: chainLevel,
+      产业链层级原值: chainLevelRaw,
+      产业链层级来源: chainLevelSource,
+      产业链层级来源文件: chainLevelSourceFile,
       事件标题: eventTitle,
       事件日期: eventDate,
       影响方向: first?.['影响方向'] ?? '',
       影响定级: first?.['影响定级'] ?? '',
       传导强度: first?.['传导强度'] ?? '',
       产业阶段: first?.['产业阶段'] ?? '',
-      产业链层级: first?.['产业链层级'] ?? '',
       命中实例数: bucket?.occurrences.length ?? 0,
       来源文件: bucket ? [...bucket.files] : [],
       事件: events,
@@ -1620,6 +1854,8 @@ function cmdValidate(argv) {
     绑定校验: validated.bindingChecked ? '已校验（--binding）' : '未校验（未提供 --binding）',
     方向: validated.directions.map((d) => ({
       细分产业方向: d.name,
+      产业链层级: d.chainLevel ?? CHAIN_LEVEL_UNKNOWN,
+      产业链层级来源: d.chainLevelSource ?? '未标注',
       事件标题: d.eventTitle || '',
       候选池数: d.candidates.length,
       标的数: d.stocks.length,
@@ -1744,6 +1980,9 @@ function main() {
 function buildInventory(overrides = {}) {
   const direction = {
     '细分产业方向': '固态电解质',
+    '产业链层级': '上游原材料/耗材',
+    '产业链层级来源': '前序结果',
+    '产业链层级来源文件': '.skills/event-stock-mapper/tests/fixtures/prior-sources/santi-3-timeliness-rank_2026-10-14.json',
     '事件标题': '新型电池产业十五五规划',
     '事件日期': '2026-09-28',
     '事件': [
@@ -1764,7 +2003,7 @@ function buildInventory(overrides = {}) {
         影响定级: 'B级',
         传导强度: '一级传导/中',
         产业阶段: '技术突破',
-        产业链层级: '中游制造集成',
+        产业链层级: '中游制造/集成',
         来源文件: '.skills/event-stock-mapper/tests/fixtures/prior-sources/event-chain-navigator_固态电池中试线量产进展_2026-10-08.json',
       },
     ],
@@ -1898,7 +2137,7 @@ function rankedSummary(inv, bindingData = null) {
   const { result, markdown } = buildResult(validated, { runDate: '2026-10-14', outputTargets: null });
   // 只从 markdown 文本中提取「# 标题之后的第一张表」的数据行，确保断言与落盘文件逐字一致
   const lines = markdown.split('\n');
-  const headerIdx = lines.findIndex((line) => line.trim() === '| 细分产业方向 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |');
+  const headerIdx = lines.findIndex((line) => line.trim().startsWith('| 细分产业方向 | 产业链层级 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |'));
   if (headerIdx < 0) throw new SkillError(E.SCHEMA, 'markdown 主表表头缺失');
   const sepIdx = headerIdx + 1;
   if (!/^\|[-|]+\|$/.test(lines[sepIdx]?.trim() ?? '')) throw new SkillError(E.SCHEMA, 'markdown 主表分隔行缺失');
@@ -1914,6 +2153,47 @@ function rankedSummary(inv, bindingData = null) {
     markdown,
     tiers: result['标的'].map((i) => i['推荐层级']),
   };
+}
+
+/** expected.json 快照：记录各夹具的档位分布、主表前 6 列顺序、warnings 码集合与 extract 链路结果。 */
+function buildExpectedSnapshot(fixturesDir, { sample, edges }) {
+  const cleanRow = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '');
+  const summaryOf = (ranked) => ({
+    counts: ranked.result.counts,
+    主表顺序: ranked['表'].map((row) => cleanRow(row).split(' | ').slice(0, 6).map((cell) => cell.trim()).join(' | ')),
+    warnings: [...new Set(ranked.result.warnings.map((w) => w['码']))].sort(),
+  });
+  const snapshot = {
+    _说明: 'event-stock-mapper selftest 的确定性快照（由 `scripts/event-stock-map.mjs selftest` 自动重新生成，脚本不读取本文件，仅供人工复核）。'
+      + '主表顺序为前 6 列：方向 | 产业链层级 | 股票代码 | 股票名称 | 流通市值 | 推荐层级。',
+    _档位规则: 'T1 占比>20%+订单/客户验证→核心受益；T2 占比>20%无验证→次要受益；T3 5–20%→次要受益；T4 <5%→观察标的；T5 占比不可得→降档；T6 口径偏大→不得命中 T1',
+    'inventory.sample.json': {
+      '候选池中位数(亿元)': round2(sample.result['方向摘要'][0]['候选池中位数(亿元)']),
+      ...summaryOf(sample),
+    },
+    'edge-cases': Object.fromEntries(Object.entries(edges).map(([name, ranked]) => [name, summaryOf(ranked)])),
+  };
+  const priorDir = path.join(fixturesDir, 'prior-sources');
+  const prior = loadPriorPassed([priorDir]);
+  const live = loadDirectionSources([priorDir]).records.filter((r) => !r.__skipped);
+  const solid = live.find((r) => r.name === '固态电解质');
+  const binding = readJsonFile(path.join(fixturesDir, 'binding.sample.json'));
+  snapshot.extract = {
+    'prior-sources': {
+      方向来源: 'prior:passed',
+      通过: prior.passed.map((p) => p.name),
+      未通过: prior.skippedDirections.map((p) => p.name),
+      '事件与方向命中的方向名': [...new Set(live.map((r) => r.name))].sort(),
+      '固态电解质的事件标题': solid?.['事件标题'] ?? '',
+      '固态电解质的事件日期': solid?.['事件日期'] ?? '',
+      产业链层级: Object.fromEntries(binding['绑定'].map((e) => [e['细分产业方向'], {
+        值: e['产业链层级'],
+        来源: e['产业链层级来源'],
+        原值: e['产业链层级原值'],
+      }])),
+    },
+  };
+  return snapshot;
 }
 
 function buildEdgeFixtures() {
@@ -1957,9 +2237,10 @@ function buildEdgeFixtures() {
     },
     排序逻辑: { 排序键: ['市场规模档位', '产业链层级', '事件驱动受益程度'] },
     细分方向: [
-      { 排名: 1, 细分产业方向: '固态电解质', 结论: '通过' },
-      { 排名: 2, 细分产业方向: '储氢瓶', 结论: '通过' },
-      { 排名: 3, 细分产业方向: '聚变级高温超导带材', 结论: '未通过' },
+      { 排名: 1, 细分产业方向: '固态电解质', 市场规模档位: '千亿级', 产业链层级: '上游原材料/耗材', 结论: '通过' },
+      // 刻意保留无斜杠变体：验证 extract/validate 的层级归一与留痕
+      { 排名: 2, 细分产业方向: '储氢瓶', 市场规模档位: '百亿级', 产业链层级: '中游制造集成', 结论: '通过' },
+      { 排名: 3, 细分产业方向: '聚变级高温超导带材', 市场规模档位: '百亿级', 产业链层级: '上游原材料/耗材', 结论: '未通过' },
     ],
     disclaimer: DISCLAIMER,
   };
@@ -2025,7 +2306,7 @@ function buildEdgeFixtures() {
     影响环节: [
       {
         细分产业方向: '固态电解质',
-        产业链层级: '中游制造集成',
+        产业链层级: '中游制造/集成',
         影响方向: '利好',
         影响定级: 'B级',
         传导强度: '一级传导/中',
@@ -2038,7 +2319,7 @@ function buildEdgeFixtures() {
       },
       {
         细分产业方向: '储氢瓶',
-        产业链层级: '中游制造集成',
+        产业链层级: '中游制造/集成',
         影响方向: '中性',
         影响定级: 'C级',
         传导强度: '二级传导/低',
@@ -2059,6 +2340,9 @@ function buildEdgeFixtures() {
   const bindingEntries = [
     {
       细分产业方向: '固态电解质',
+      产业链层级: '上游原材料/耗材',
+      产业链层级来源: '前序结果',
+      产业链层级来源文件: '.skills/event-stock-mapper/tests/fixtures/prior-sources/santi-3-timeliness-rank_2026-10-14.json',
       事件标题: '新型电池产业十五五规划',
       事件日期: '2026-09-28',
       影响定级: 'A级',
@@ -2083,13 +2367,16 @@ function buildEdgeFixtures() {
           影响定级: 'B级',
           传导强度: '一级传导/中',
           产业阶段: '技术突破',
-          产业链层级: '中游制造集成',
+          产业链层级: '中游制造/集成',
           来源文件: bindingFile2,
         },
       ],
     },
     {
       细分产业方向: '正极材料',
+      产业链层级: '上游原材料/耗材',
+      产业链层级来源: '事件文件',
+      产业链层级来源文件: bindingFile1,
       事件标题: '新型电池产业十五五规划',
       事件日期: '2026-09-28',
       影响定级: 'B级',
@@ -2111,6 +2398,9 @@ function buildEdgeFixtures() {
     },
     {
       细分产业方向: '储氢瓶',
+      产业链层级: '中游制造/集成',
+      产业链层级来源: '事件文件',
+      产业链层级来源文件: bindingFile2,
       事件标题: '固态电池中试线量产进展',
       事件日期: '2026-10-08',
       影响定级: 'C级',
@@ -2125,7 +2415,7 @@ function buildEdgeFixtures() {
           影响定级: 'C级',
           传导强度: '二级传导/低',
           产业阶段: '实验室阶段',
-          产业链层级: '中游制造集成',
+          产业链层级: '中游制造/集成',
           来源文件: bindingFile2,
         },
       ],
@@ -2214,19 +2504,21 @@ function runSelftest() {
   ASSERT.eq(result['标的'].length, 8, '入表 8 只（5–8 区间上限）');
   ASSERT.eq(tiers, [TIER_CORE, TIER_CORE, TIER_CORE, TIER_MID, TIER_MID, TIER_MID, TIER_WATCH, TIER_WATCH], 'sample 档位分布（核心3/次要3/观察2）');
   ASSERT.eq(result.counts, { [TIER_CORE]: 3, [TIER_MID]: 3, [TIER_WATCH]: 2 }, 'sample 档位统计：3 核心 / 3 次要 / 2 观察');
-  ASSERT.eq(表[0].split(' | ').length, 6, '每行单元格数 = 6（6 列固定）');
-  ASSERT.eq(表[0].split(' | ')[4], '核心受益', '第 5 列为推荐层级');
-  ASSERT.eq(表[0].split(' | ')[3], '196.32 亿元', '第 4 列为流通市值');
-  ASSERT.eq(表[0].split(' | ')[2], '当升科技', '第 3 列为股票名称');
-  ASSERT.eq(表[0].startsWith('| 固态电解质 | 300073.SZ | 当升科技 | 196.32 亿元 | 核心受益 | 相关业务占比 36.00%'), true, 'T1：36% + 送样验证 → 核心受益（市值最小）');
-  ASSERT.eq(表[1].startsWith('| 固态电解质 | 002407.SZ | 多氟多 | 289.15 亿元 | 核心受益 |'), true, 'T1：42% + 客户定点 → 核心受益');
-  ASSERT.eq(表[2].startsWith('| 固态电解质 | 300037.SZ | 新宙邦 | 320.91 亿元 | 核心受益 |'), true, 'T1：35% + 客户认证 → 核心受益');
-  ASSERT.eq(表[3].startsWith('| 固态电解质 | 603026.SH | 石大胜华 | 123.17 亿元 | 次要受益 |'), true, 'T6 口径偏大 28% 降档为次要受益');
-  ASSERT.eq(表[4].startsWith('| 固态电解质 | 002340.SZ | 格林美 | 308.11 亿元 | 次要受益 |'), true, 'T3 12% → 次要受益');
-  ASSERT.eq(表[5].startsWith('| 固态电解质 | 002709.SZ | 天赐材料 | 466.28 亿元 | 次要受益 |'), true, '科学计数法 4.66284e+10 → 466.28 亿元；T6 偏大降档');
-  ASSERT.eq(表[6].startsWith('| 固态电解质 | 301292.SZ | 海科新源 | 43.48 亿元 | 观察标的 |'), true, 'T5 占比缺失 → 观察标的');
-  ASSERT.eq(表[7].startsWith('| 固态电解质 | 600884.SH | 杉杉股份 | 204.98 亿元 | 观察标的 |'), true, 'T4 3% → 观察标的');
-  ASSERT.eq(结果.markdown.includes('| 细分产业方向 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |'), true, 'markdown 主表表头存在');
+  ASSERT.eq(表[0].split(' | ').length, 7, '每行单元格数 = 7（7 列固定：产业链层级列）');
+  ASSERT.eq(表[0].split(' | ')[5], '核心受益', '第 6 列为推荐层级');
+  ASSERT.eq(表[0].split(' | ')[4], '196.32 亿元', '第 5 列为流通市值');
+  ASSERT.eq(表[0].split(' | ')[3], '当升科技', '第 4 列为股票名称');
+  ASSERT.eq(表[0].split(' | ')[2], '300073.SZ', '第 3 列为股票代码');
+  ASSERT.eq(表[0].split(' | ')[1], '上游原材料/耗材', '第 2 列为产业链层级（来自 santi-3「通过」声明）');
+  ASSERT.eq(表[0].startsWith('| 固态电解质 | 上游原材料/耗材 | 300073.SZ | 当升科技 | 196.32 亿元 | 核心受益 | 相关业务占比 36.00%'), true, 'T1：36% + 送样验证 → 核心受益（市值最小）');
+  ASSERT.eq(表[1].startsWith('| 固态电解质 | 上游原材料/耗材 | 002407.SZ | 多氟多 | 289.15 亿元 | 核心受益 |'), true, 'T1：42% + 客户定点 → 核心受益');
+  ASSERT.eq(表[2].startsWith('| 固态电解质 | 上游原材料/耗材 | 300037.SZ | 新宙邦 | 320.91 亿元 | 核心受益 |'), true, 'T1：35% + 客户认证 → 核心受益');
+  ASSERT.eq(表[3].startsWith('| 固态电解质 | 上游原材料/耗材 | 603026.SH | 石大胜华 | 123.17 亿元 | 次要受益 |'), true, 'T6 口径偏大 28% 降档为次要受益');
+  ASSERT.eq(表[4].startsWith('| 固态电解质 | 上游原材料/耗材 | 002340.SZ | 格林美 | 308.11 亿元 | 次要受益 |'), true, 'T3 12% → 次要受益');
+  ASSERT.eq(表[5].startsWith('| 固态电解质 | 上游原材料/耗材 | 002709.SZ | 天赐材料 | 466.28 亿元 | 次要受益 |'), true, '科学计数法 4.66284e+10 → 466.28 亿元；T6 偏大降档');
+  ASSERT.eq(表[6].startsWith('| 固态电解质 | 上游原材料/耗材 | 301292.SZ | 海科新源 | 43.48 亿元 | 观察标的 |'), true, 'T5 占比缺失 → 观察标的');
+  ASSERT.eq(表[7].startsWith('| 固态电解质 | 上游原材料/耗材 | 600884.SH | 杉杉股份 | 204.98 亿元 | 观察标的 |'), true, 'T4 3% → 观察标的');
+  ASSERT.eq(结果.markdown.includes('| 细分产业方向 | 产业链层级 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |'), true, 'markdown 主表表头存在（7 列）');
   ASSERT.eq(结果.markdown.includes(DISCLAIMER), true, 'markdown 含免责声明');
   const coreShares = result['标的'].filter((i) => i['推荐层级'] === TIER_CORE).map((i) => i['业务占比'].value);
   ASSERT.eq(coreShares, [0.36, 0.42, 0.35], '核心受益按流通市值升序（当升196 → 多氟多289 → 新宙邦321）');
@@ -2431,6 +2723,22 @@ function runSelftest() {
     const crossFromFile = rankedSummary(readJsonFile(path.join(fixturesDir, 'edge-cases', 'cross-direction.json')));
     ASSERT.eq(crossFromFile.result['标的'].length, 16, '夹具：跨方向 8 × 2 = 16 行');
     ASSERT.true(crossFromFile.result.warnings.some((w) => w['码'] === W.MULTI_DIRECTION), '夹具：记 W_MULTI_DIRECTION');
+
+    // expected.json 是 selftest 的确定性快照（人工复核用，脚本不读取）：必须由本次运行重新生成并保持一致
+    const snapshotPath = path.join(skillDir, 'tests', 'expected.json');
+    const snapshot = buildExpectedSnapshot(fixturesDir, {
+      sample: 结果,
+      edges: {
+        'missing-share': missingShare,
+        'oversize-caliber': oversize,
+        'no-verification': noVerify,
+        'mcap-missing': mcapMissing,
+        'cross-direction': crossFromFile,
+      },
+    });
+    writeFileEnsured(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    ASSERT.eq(readJsonFile(snapshotPath), snapshot, 'expected.json 由 selftest 重新生成且自洽');
+    ASSERT.eq(snapshot['inventory.sample.json']['主表顺序'][0].split(' | ')[1], '上游原材料/耗材', 'expected.json：主表顺序快照含产业链层级列');
   } else {
     ASSERT.fail(`夹具目录不存在：${fixturesDir}`);
   }
@@ -2442,6 +2750,7 @@ function runSelftest() {
     ASSERT.eq(prior.passed.map((x) => x.name), ['固态电解质', '储氢瓶'], 'extract：santi-3 结果取「通过」方向');
     ASSERT.eq(prior.skippedDirections.map((x) => x.name), ['聚变级高温超导带材'], 'extract：未通过方向入 skipped');
     ASSERT.eq(prior.skippedFiles.length, 2, 'extract：事件文件（非 santi-3 形态）被跳过并留痕');
+    ASSERT.eq(prior.passed.map((x) => x.chainLevelRaw), ['上游原材料/耗材', '中游制造集成'], 'extract：santi-3「通过」条目的产业链层级被带出（含无斜杠变体）');
     const mapping = loadDirectionSources([priorDir]);
     const live = mapping.records.filter((r) => !r.__skipped);
     // 只有带事件载荷的记录才算绑定；santi-3 的纯方向清单（排名/结论）与无事件文件一律不得计入
@@ -2451,8 +2760,66 @@ function runSelftest() {
     ASSERT.eq(solid['事件标题'], '固态电池中试线量产进展', 'extract：事件标题来自事件文件（按文件字典序取首条）');
     ASSERT.eq(solid['事件日期'], '2026-10-08', 'extract：事件日期来自事件文件');
     ASSERT.eq(solid['影响定级'], 'B级', 'extract：影响定级随事件文件带出');
-    ASSERT.eq({ ...solid }['产业链层级'], '中游制造集成', 'extract：产业链层级随事件文件带出');
+    ASSERT.eq({ ...solid }['产业链层级'], '中游制造/集成', 'extract：产业链层级随事件文件带出且为标准枚举写法');
     ASSERT.eq(mapping.records.filter((r) => r.__skipped).length, 1, 'extract：santi-3 清单无事件载荷被跳过并留痕');
+  }
+
+  // 产业链层级：归一、优先级与非法值拦截
+  {
+    ASSERT.eq(normalizeChainLevel('中游制造集成').值, '中游制造/集成', 'chain：无斜杠变体归一为标准枚举');
+    ASSERT.eq(normalizeChainLevel('上游设备/零部件').值, '上游核心零部件/设备', 'chain：别名变体归一');
+    ASSERT.eq(normalizeChainLevel('上游原材料/耗材').是否改写, false, 'chain：标准写法不改写');
+    ASSERT.eq(normalizeChainLevel('').值, CHAIN_LEVEL_UNKNOWN, 'chain：缺失 → 未标注');
+    {
+      const warns = [];
+      normalizeChainLevel('中游制造集成', warns);
+      ASSERT.eq(warns.map((w) => w['码']), [W.CHAIN_LEVEL_NORMALIZED], 'chain：归一记 W_CHAIN_LEVEL_NORMALIZED');
+    }
+    {
+      const warns = [];
+      ASSERT.eq(normalizeChainLevel('宇宙级', warns).值, CHAIN_LEVEL_UNKNOWN, 'chain：事件级非法值 → 未标注（宽松）');
+      ASSERT.eq(warns.length, 1, 'chain：事件级非法值仍留痕');
+    }
+    expectThrow('chain：方向级非法值 → E_SCHEMA', () => normalizeChainLevel('宇宙级', null, { 对象: 'X', 严格: true }), E.SCHEMA);
+    // 声明优先级：santi-3 声明值 > 绑定事件值；冲突记 W_CHAIN_LEVEL_CONFLICT
+    {
+      const inv = buildInventory({});
+      inv['细分方向'][0]['产业链层级'] = '下游应用';
+      const conflict = rankedSummary(inv, readJsonFile(path.join(fixturesDir, 'binding.sample.json')));
+      ASSERT.eq(conflict.result['绑定'][0]['产业链层级'], '下游应用', 'chain：声明值优先于绑定事件值');
+      ASSERT.true(conflict.result.warnings.some((w) => w['码'] === W.CHAIN_LEVEL_CONFLICT), 'chain：冲突记 W_CHAIN_LEVEL_CONFLICT');
+    }
+    // 声明缺失 → 回退绑定事件 事件[0] 的层级
+    {
+      const inv = buildInventory({});
+      delete inv['细分方向'][0]['产业链层级'];
+      delete inv['细分方向'][0]['产业链层级来源'];
+      delete inv['细分方向'][0]['产业链层级来源文件'];
+      const fallback = rankedSummary(inv, readJsonFile(path.join(fixturesDir, 'binding.sample.json')));
+      ASSERT.eq(fallback.result['绑定'][0]['产业链层级'], '上游原材料/耗材', 'chain：声明缺失时回退绑定事件 事件[0] 层级');
+    }
+    // 全部来源都缺 → 未标注（不阻断）
+    {
+      const inv = buildInventory({});
+      delete inv['细分方向'][0]['产业链层级'];
+      inv['细分方向'][0]['事件'] = [];
+      inv['细分方向'][0]['事件标题'] = '';
+      const none = rankedSummary(inv);
+      ASSERT.eq(none['表'][0].split(' | ')[1], CHAIN_LEVEL_UNKNOWN, 'chain：无任何来源 → 主表写未标注');
+    }
+    // 方向级非法值直接 E_SCHEMA
+    {
+      const inv = buildInventory({});
+      inv['细分方向'][0]['产业链层级'] = '宇宙级';
+      expectThrow('chain：方向级非法值进 rank → E_SCHEMA', () => validateInventory(inv), E.SCHEMA);
+    }
+    // 未传 --binding 的兼容路径：声明层级照样进主表
+    {
+      const inv = buildInventory({});
+      const noBinding = rankedSummary(inv);
+      ASSERT.eq(noBinding['表'][0].split(' | ')[1], '上游原材料/耗材', 'chain：无 --binding 时声明层级仍进主表');
+      ASSERT.eq(noBinding.result['标的'][0]['产业链层级'], '上游原材料/耗材', 'chain：无 --binding 时标的行带层级');
+    }
   }
 
   // 事件—影响环节绑定：绑不到事件的方向整体跳过
@@ -2469,9 +2836,31 @@ function runSelftest() {
     ASSERT.eq(bound.result.meta['输入方向数'], 1, 'binding：输入方向数 = 有效 + 跳过');
     ASSERT.true(bound.result.warnings.some((w) => w['码'] === W.BINDING_NOT_PROVIDED) === false, 'binding：传了 --binding 不再记 W_BINDING_NOT_PROVIDED');
     ASSERT.eq(bound.markdown.includes('### 事件 — 影响环节绑定'), true, 'binding：markdown 含绑定表');
-    ASSERT.eq(bound.markdown.includes('| 细分产业方向 | 事件标题 | 事件日期 | 影响定级 | 传导强度 | 来源文件 |'), true, 'binding：绑定表表头 6 列');
-    ASSERT.eq(bound.markdown.indexOf('### 事件 — 影响环节绑定') < bound.markdown.indexOf('| 细分产业方向 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |'), true, 'binding：绑定表在主表之前');
-    ASSERT.eq(bound['表'][0].split(' | ').length, 6, 'binding：主表仍严格 6 列');
+    ASSERT.eq(bound.markdown.includes('| 细分产业方向 | 产业链层级 | 事件标题 | 事件日期 | 影响定级 | 传导强度 | 来源文件 |'), true, 'binding：绑定表表头 7 列（含产业链层级）');
+    ASSERT.eq(bound.markdown.indexOf('### 事件 — 影响环节绑定') < bound.markdown.indexOf('| 细分产业方向 | 产业链层级 | 股票代码 | 股票名称 | 流通市值 | 推荐层级 | 层级解读 |'), true, 'binding：绑定表在主表之前');
+    ASSERT.eq(bound['表'][0].split(' | ').length, 7, 'binding：主表严格 7 列');
+    ASSERT.eq(bound['表'][0].split(' | ')[1], '上游原材料/耗材', 'binding：主表第 2 列为产业链层级');
+    ASSERT.eq(bound.result['绑定'][0]['产业链层级'], '上游原材料/耗材', 'binding：绑定[] 带方向级产业链层级');
+    ASSERT.eq(bound.result['绑定'][0]['产业链层级来源'], '前序结果', 'binding：绑定[] 带层级来源');
+    ASSERT.eq(bound.result['标的'][0]['产业链层级'], '上游原材料/耗材', 'binding：标的行带产业链层级（透传到主表数据）');
+    ASSERT.eq(bound.result['方向摘要'][0]['产业链层级'], '上游原材料/耗材', 'binding：方向摘要带产业链层级');
+    ASSERT.eq(bound.markdown.includes('**产业链层级口径**'), true, 'binding：报告含产业链层级口径行');
+    // 绑定表首行：方向名 + 层级 + 事件；同方向第 2 个事件续行留空方向名与层级（不随事件分裂）
+    const bindingRows = bound.markdown.split('\n').filter((line) => line.startsWith('| 固态电解质 |'));
+    ASSERT.eq(bindingRows.length >= 1, true, 'binding：绑定表含方向行');
+    {
+      const lines = bound.markdown.split('\n');
+      const headIdx = lines.findIndex((line) => line.trim() === '| 细分产业方向 | 产业链层级 | 事件标题 | 事件日期 | 影响定级 | 传导强度 | 来源文件 |');
+      ASSERT.true(headIdx > 0, 'binding：绑定表表头可定位');
+      const firstRow = lines[headIdx + 2];
+      const secondRow = lines[headIdx + 3];
+      ASSERT.eq(firstRow.split(' | ').length, 7, 'binding：绑定表数据行 7 格');
+      ASSERT.eq(firstRow.split(' | ')[1], '上游原材料/耗材', 'binding：绑定表第 2 列为产业链层级');
+      ASSERT.eq(firstRow.split(' | ')[2], '新型电池产业十五五规划', 'binding：绑定表第 3 列为事件标题');
+      ASSERT.eq(secondRow.split(' | ')[1], '上游原材料/耗材', 'binding：绑定表续行复写方向级产业链层级（每行自洽）');
+      ASSERT.eq(secondRow.split(' | ')[2], '固态电池中试线量产进展', 'binding：绑定表续行第 3 格为第 2 个事件标题');
+      ASSERT.eq(secondRow.split(' | ')[3], '2026-10-08', 'binding：绑定表续行日期仍在位');
+    }
 
     // 未绑定方向 → 整体跳过，其余方向照常
     const twoDirections = buildInventory({ config: { tier_min: { [TIER_CORE]: 0, [TIER_MID]: 0, [TIER_WATCH]: 0 } } });
@@ -2479,13 +2868,22 @@ function runSelftest() {
     twoDirections['细分方向'][1]['细分产业方向'] = '聚变级高温超导带材';
     twoDirections['细分方向'][1]['事件标题'] = '';
     twoDirections['细分方向'][1]['事件'] = [];
+    twoDirections['细分方向'][1]['产业链层级'] = '中游制造集成';
     const skippedResult = rankedSummary(twoDirections, bindingFromFile);
     ASSERT.eq(skippedResult.result.meta['跳过方向数'], 1, 'binding：未绑定方向被跳过 1 个');
     ASSERT.eq(skippedResult.result.meta['跳过方向'][0]['细分产业方向'], '聚变级高温超导带材', 'binding：跳过方向名留痕');
     ASSERT.eq(skippedResult.result.meta['跳过方向'][0]['原因'], 'binding 中未出现该方向', 'binding：跳过原因留痕');
+    ASSERT.eq(skippedResult.result.meta['跳过方向'][0]['产业链层级'], '中游制造/集成', 'binding：跳过方向仍带（归一的）产业链层级');
     ASSERT.eq([...new Set(skippedResult.result['标的'].map((i) => i['细分产业方向']))], ['固态电解质'], 'binding：未绑定方向不进主表');
     ASSERT.true(skippedResult.result.warnings.some((w) => w['码'] === W.DIRECTION_SKIPPED), 'binding：记 W_DIRECTION_SKIPPED');
     ASSERT.eq(skippedResult.markdown.includes('[已跳过]'), true, 'binding：绑定表列出被跳过方向');
+    ASSERT.eq(
+      skippedResult.markdown.includes('| 聚变级高温超导带材 | 中游制造/集成 | [已跳过] | 未标注 | 未标注 | 未标注 | 跳过原因：binding 中未出现该方向 |'),
+      true,
+      'binding：跳过行也渲染产业链层级与原因',
+    );
+    ASSERT.true(skippedResult.result.warnings.some((w) => w['码'] === W.CHAIN_LEVEL_NORMALIZED), 'binding：无斜杠变体记 W_CHAIN_LEVEL_NORMALIZED');
+    ASSERT.eq(skippedResult.markdown.includes('**产业链层级口径**：来自 santi-3「通过」条目或事件文件原文（四层枚举，变体已归一）；有效方向 1 个，已标注 1 个。'), true, 'binding：层级口径行只统计有效方向');
 
     // 全部未绑定 → E_NO_ENTRIES
     const noneBound = buildInventory({});
