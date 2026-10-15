@@ -1,0 +1,1017 @@
+{
+  "meta": {
+    "generated_at": "2026-10-14T20:00:00+08:00",
+    "技能": "event-stock-mapper",
+    "技能版本": "1.1.0",
+    "数据来源": [
+      "wind-mcp-skill",
+      "web_search"
+    ],
+    "输入方向数": 1,
+    "市值口径": "流通市值",
+    "文件集合": {
+      "事件与方向": [
+        "fixtures/event-chain-navigator_sample.json"
+      ]
+    },
+    "降级说明": []
+  },
+  "config": {
+    "min_share": 0.2,
+    "mid_share": 0.05,
+    "top_min": 5,
+    "top_max": 8,
+    "tier_min": {
+      "核心受益": 0,
+      "次要受益": 0,
+      "观察标的": 0
+    },
+    "tier_max": {
+      "核心受益": 4,
+      "次要受益": 3,
+      "观察标的": 2
+    },
+    "units": {
+      "流通市值": [
+        {
+          "unit": "亿元",
+          "currency": "CNY"
+        }
+      ]
+    }
+  },
+  "细分方向": [
+    {
+      "细分产业方向": "固态电解质",
+      "事件标题": "新型电池产业十五五规划",
+      "事件日期": "2026-09-28",
+      "事件": [
+        {
+          "事件标题": "新型电池产业十五五规划",
+          "事件日期": "2026-09-28",
+          "影响方向": "利好",
+          "影响定级": "A级",
+          "传导强度": "一级传导/高",
+          "产业阶段": "产业化拐点",
+          "产业链层级": "上游原材料/耗材",
+          "来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/event-chain-navigator_新型电池产业十五五规划_2026-09-28.json"
+        },
+        {
+          "事件标题": "固态电池中试线量产进展",
+          "事件日期": "2026-10-08",
+          "影响方向": "利好",
+          "影响定级": "B级",
+          "传导强度": "一级传导/中",
+          "产业阶段": "技术突破",
+          "产业链层级": "中游制造集成",
+          "来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/event-chain-navigator_固态电池中试线量产进展_2026-10-08.json"
+        }
+      ],
+      "候选池中位数(亿元)": "247.07",
+      "候选池": [
+        {
+          "code": "002709.SZ",
+          "name": "天赐材料",
+          "mcap": "466.28",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电池;锂电电解液",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300037.SZ",
+          "name": "新宙邦",
+          "mcap": "320.91",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电池",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "002340.SZ",
+          "name": "格林美",
+          "mcap": "308.11",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;电池回收",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "002407.SZ",
+          "name": "多氟多",
+          "mcap": "289.15",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;六氟磷酸锂",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "600884.SH",
+          "name": "杉杉股份",
+          "mcap": "204.98",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电负极",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300073.SZ",
+          "name": "当升科技",
+          "mcap": "196.32",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电正极",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "603026.SH",
+          "name": "石大胜华",
+          "mcap": "123.17",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电电解液",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "301292.SZ",
+          "name": "海科新源",
+          "mcap": "43.48",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电电解液",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ],
+      "标的": [
+        {
+          "code": "002709.SZ",
+          "name": "天赐材料",
+          "市值": {
+            "value": "4.66284e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.9305,
+            "业务行": "锂离子电池材料产品",
+            "precision": "近似",
+            "caliber": "锂离子电池材料整体",
+            "caliber_vs_target": "偏大",
+            "caliber_note": "大于固态电解质口径",
+            "tag": "[待验证]",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "中"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "与头部电池厂签订固态电解质供货协议",
+            "source": {
+              "type": "Wind 新闻检索",
+              "detail": "订单进展",
+              "year": "2026"
+            },
+            "confidence": "中",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": false
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300037.SZ",
+          "name": "新宙邦",
+          "市值": {
+            "value": "32090520000",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.35,
+            "业务行": "电池化学品",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "固态电解质中试线通过客户认证",
+            "source": {
+              "type": "公司公告",
+              "detail": "认证公告",
+              "year": "2026"
+            },
+            "confidence": "高",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "002340.SZ",
+          "name": "格林美",
+          "市值": {
+            "value": "30811210000",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.12,
+            "业务行": "新能源材料",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": false,
+            "证据": "",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "中"
+        },
+        {
+          "code": "600884.SH",
+          "name": "杉杉股份",
+          "市值": {
+            "value": "20498180000",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.03,
+            "业务行": "负极材料",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": false,
+            "证据": "",
+            "dual_query": {
+              "current": false,
+              "history": false,
+              "merged": false
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "中"
+        },
+        {
+          "code": "603026.SH",
+          "name": "石大胜华",
+          "市值": {
+            "value": "1.23168e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.28,
+            "业务行": "碳酸酯类",
+            "precision": "近似",
+            "caliber": "电解液溶剂整体",
+            "caliber_vs_target": "偏大",
+            "tag": "[待验证]",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "中"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "与电解液厂签订长协",
+            "source": {
+              "type": "Wind 新闻检索",
+              "detail": "长协",
+              "year": "2026"
+            },
+            "confidence": "中",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "中"
+        },
+        {
+          "code": "301292.SZ",
+          "name": "海科新源",
+          "市值": {
+            "value": "4.34805e+9",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": null,
+          "订单验证": null,
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "低"
+        },
+        {
+          "code": "002407.SZ",
+          "name": "多氟多",
+          "市值": {
+            "value": "2.891456e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.42,
+            "业务行": "六氟磷酸锂及固态电解质",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "客户定点并批量供货",
+            "source": {
+              "type": "公司公告",
+              "detail": "定点公告",
+              "year": "2026"
+            },
+            "confidence": "高",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300073.SZ",
+          "name": "当升科技",
+          "市值": {
+            "value": "1.963161e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.36,
+            "业务行": "多元材料",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "固态电池正极送样通过验证",
+            "source": {
+              "type": "Wind 新闻检索",
+              "detail": "送样验证",
+              "year": "2026"
+            },
+            "confidence": "中",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ]
+    },
+    {
+      "细分产业方向": "钠离子电池材料",
+      "事件标题": "新型电池产业十五五规划",
+      "事件日期": "2026-09-28",
+      "事件": [
+        {
+          "事件标题": "新型电池产业十五五规划",
+          "事件日期": "2026-09-28",
+          "影响方向": "利好",
+          "影响定级": "A级",
+          "传导强度": "一级传导/高",
+          "产业阶段": "产业化拐点",
+          "产业链层级": "上游原材料/耗材",
+          "来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/event-chain-navigator_新型电池产业十五五规划_2026-09-28.json"
+        },
+        {
+          "事件标题": "固态电池中试线量产进展",
+          "事件日期": "2026-10-08",
+          "影响方向": "利好",
+          "影响定级": "B级",
+          "传导强度": "一级传导/中",
+          "产业阶段": "技术突破",
+          "产业链层级": "中游制造集成",
+          "来源文件": ".skills/event-stock-mapper/tests/fixtures/prior-sources/event-chain-navigator_固态电池中试线量产进展_2026-10-08.json"
+        }
+      ],
+      "候选池中位数(亿元)": "247.07",
+      "候选池": [
+        {
+          "code": "002709.SZ",
+          "name": "天赐材料",
+          "mcap": "466.28",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电池;锂电电解液",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300037.SZ",
+          "name": "新宙邦",
+          "mcap": "320.91",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电池",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "002340.SZ",
+          "name": "格林美",
+          "mcap": "308.11",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;电池回收",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "002407.SZ",
+          "name": "多氟多",
+          "mcap": "289.15",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;六氟磷酸锂",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "600884.SH",
+          "name": "杉杉股份",
+          "mcap": "204.98",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电负极",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300073.SZ",
+          "name": "当升科技",
+          "mcap": "196.32",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电正极",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "603026.SH",
+          "name": "石大胜华",
+          "mcap": "123.17",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电电解液",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "301292.SZ",
+          "name": "海科新源",
+          "mcap": "43.48",
+          "market": "A股",
+          "currency": "CNY",
+          "所属概念板块": "固态电池;锂电电解液",
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "search_stocks",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ],
+      "标的": [
+        {
+          "code": "002709.SZ",
+          "name": "天赐材料",
+          "市值": {
+            "value": "4.66284e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.9305,
+            "业务行": "锂离子电池材料产品",
+            "precision": "近似",
+            "caliber": "锂离子电池材料整体",
+            "caliber_vs_target": "偏大",
+            "caliber_note": "大于固态电解质口径",
+            "tag": "[待验证]",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "中"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "与头部电池厂签订固态电解质供货协议",
+            "source": {
+              "type": "Wind 新闻检索",
+              "detail": "订单进展",
+              "year": "2026"
+            },
+            "confidence": "中",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": false
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300037.SZ",
+          "name": "新宙邦",
+          "市值": {
+            "value": "32090520000",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.35,
+            "业务行": "电池化学品",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "固态电解质中试线通过客户认证",
+            "source": {
+              "type": "公司公告",
+              "detail": "认证公告",
+              "year": "2026"
+            },
+            "confidence": "高",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "002340.SZ",
+          "name": "格林美",
+          "市值": {
+            "value": "30811210000",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.12,
+            "业务行": "新能源材料",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": false,
+            "证据": "",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "中"
+        },
+        {
+          "code": "600884.SH",
+          "name": "杉杉股份",
+          "市值": {
+            "value": "20498180000",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.03,
+            "业务行": "负极材料",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": false,
+            "证据": "",
+            "dual_query": {
+              "current": false,
+              "history": false,
+              "merged": false
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "中"
+        },
+        {
+          "code": "603026.SH",
+          "name": "石大胜华",
+          "市值": {
+            "value": "1.23168e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.28,
+            "业务行": "碳酸酯类",
+            "precision": "近似",
+            "caliber": "电解液溶剂整体",
+            "caliber_vs_target": "偏大",
+            "tag": "[待验证]",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "中"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "与电解液厂签订长协",
+            "source": {
+              "type": "Wind 新闻检索",
+              "detail": "长协",
+              "year": "2026"
+            },
+            "confidence": "中",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "中"
+        },
+        {
+          "code": "301292.SZ",
+          "name": "海科新源",
+          "市值": {
+            "value": "4.34805e+9",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": null,
+          "订单验证": null,
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "低"
+        },
+        {
+          "code": "002407.SZ",
+          "name": "多氟多",
+          "市值": {
+            "value": "2.891456e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.42,
+            "业务行": "六氟磷酸锂及固态电解质",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "客户定点并批量供货",
+            "source": {
+              "type": "公司公告",
+              "detail": "定点公告",
+              "year": "2026"
+            },
+            "confidence": "高",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        },
+        {
+          "code": "300073.SZ",
+          "name": "当升科技",
+          "市值": {
+            "value": "1.963161e+10",
+            "unit": "元",
+            "index_field": "流通市值",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_price_indicators 流通市值",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "业务占比": {
+            "value": 0.36,
+            "业务行": "多元材料",
+            "source": {
+              "type": "Wind 结构化数据",
+              "detail": "get_stock_fundamentals 主营收入构成",
+              "year": "2026"
+            },
+            "confidence": "高"
+          },
+          "订单验证": {
+            "有": true,
+            "证据": "固态电池正极送样通过验证",
+            "source": {
+              "type": "Wind 新闻检索",
+              "detail": "送样验证",
+              "year": "2026"
+            },
+            "confidence": "中",
+            "dual_query": {
+              "current": true,
+              "history": true,
+              "merged": true
+            }
+          },
+          "source": {
+            "type": "Wind 结构化数据",
+            "detail": "综合",
+            "year": "2026"
+          },
+          "confidence": "高"
+        }
+      ]
+    }
+  ]
+}
