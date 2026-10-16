@@ -7,6 +7,7 @@
  *   audit      只读校验一轮运行的五步产物，产出/刷新 运行清单.json
  *   merge-pool 选股池合并：去重 → 按 santi-3 排名保序 → 截断方向数上限 → 原子写回 + 归档 + 备份
  *   manifest   从 A/B/C/来源标记描述文件生成 santi-0-输入.json
+ *   asof-pool  回溯（as-of）运行时解析 A 基准池来源（历史备份 / as-of 快照 / 空池）
  *   schedule   只生成调度配置文本（不改系统 crontab / 计划任务）
  *   selftest   跑全部断言
  *
@@ -18,10 +19,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const POOL_HEADER = ['细分产业方向', '产业链层级', '股票代码', '股票名称', '流通市值', '推荐层级', '层级解读'];
 const DEFAULT_MAX_DIRECTIONS = 5;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** 主池历史备份命名：`当前选股池_<yyyy-mm-dd>-<HH>-<MM>.csv`（写回前复制的那一份）。 */
+const POOL_BACKUP_RE = /^当前选股池_(\d{4}-\d{2}-\d{2})-(\d{2})-(\d{2})\.csv$/;
+/** 回溯快照命名：`当前选股池_asof-<yyyy-mm-dd>.csv`（回溯轮产物，不是主池）。 */
+const POOL_ASOF_RE = /^当前选股池_asof-(\d{4}-\d{2}-\d{2})\.csv$/;
 
 // ---------------------------------------------------------------- 基础工具
 
@@ -29,21 +35,31 @@ const USAGE = `用法：node santi-daily-pool.mjs <子命令> [选项]
 
 scaffold    --root <根目录> [--timestamp <yyyy-mm-dd-hh-MM>]
 audit       --run-dir <本轮运行目录> --root <根目录> [--write]
-merge-pool  --pool <csv> [--new <csv>] --rank <json> --out <csv>
-            [--archive <csv>] [--backup-dir <dir>] [--max-directions <N>]
-            [--bom] [--dry-run] [--report <json>]
+merge-pool  --pool <csv|-> [--new <csv>] --rank <json> --out <csv>
+            [--pool-out <csv>] [--archive <csv>] [--backup-dir <dir>]
+            [--no-backup] [--max-directions <N>] [--bom] [--dry-run] [--report <json>]
 manifest    --pool <csv|-> --bullish <json> --bearish <json> --out <json>
             [--max-bullish <N>] [--run-dir <dir>] [--候选 <json>]
             [--dict <词典路径>] [--mapping <名称映射.json>]
+asof-pool   --pool-dir <当前选股池目录> --date YYYY-MM-DD
+            [--pool <显式选股池.csv>] [--out <json>]
 schedule    --time HH:MM --date-skill <技能名> --root <根目录>
             [--channel file|conversation] [--out <md>] [--print-only]
 selftest
+
+说明：
+  --pool -            空池基准（不读文件）；merge-pool 用它时必须同时给 --pool-out
+  --pool-out <csv>    写回目标（默认 = --pool）；备份对象即写回目标
+  --no-backup         跳过写前备份（回溯轮写 as-of 快照时使用）
+  asof-pool           回溯运行时解析「A 基准池」；只读，不写主池
 `;
 
 class CliError extends Error {
-  constructor(message, code = 2) {
+  /** @param {string} message @param {number} code 0/1/2 @param {string|null} label 语义错误码（如 E_ASOF_DATE） */
+  constructor(message, code = 2, label = null) {
     super(message);
     this.code = code;
+    this.label = label;
   }
 }
 
@@ -105,6 +121,12 @@ function writeFileAtomic(file, content) {
 function nowStamp(date = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}-${p(date.getHours())}-${p(date.getMinutes())}`;
+}
+
+/** 本地时区（Asia/Shanghai）的当天日期，`YYYY-MM-DD`。 */
+function todayLocal(date = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }
 
 function isPlainObject(value) {
@@ -502,6 +524,171 @@ function cmdManifest(args) {
   return 0;
 }
 
+// ---------------------------------------------------------------- asof-pool
+
+/** 列出主池历史备份（`历史/当前选股池_<stamp>.csv`），按时间戳升序。 */
+function listPoolBackups(dir) {
+  return listDirSafe(dir)
+    .map((name) => {
+      const match = POOL_BACKUP_RE.exec(name);
+      if (match === null) return null;
+      return { file: path.join(dir, name), date: match[1], stamp: `${match[1]}-${match[2]}-${match[3]}` };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.stamp.localeCompare(b.stamp));
+}
+
+/** 列出回溯 as-of 快照（`历史回溯/当前选股池_asof-<date>.csv`），按日期升序。 */
+function listPoolAsof(dir) {
+  return listDirSafe(dir)
+    .map((name) => {
+      const match = POOL_ASOF_RE.exec(name);
+      if (match === null) return null;
+      return { file: path.join(dir, name), date: match[1] };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** 只读校验快照并用 `readPool` 读出方向数；损坏/表头不符 → E_ASOF_SNAPSHOT_INVALID。 */
+function inspectSnapshot(file) {
+  try {
+    const pool = readPool(file);
+    const directions = [...new Set(pool.rows.map((obj) => cell(obj['细分产业方向'])).filter((n) => n !== ''))];
+    return { 方向数: directions.length, 行数: pool.rows.length };
+  } catch (error) {
+    throw new CliError(`快照不可用：${file}（${error.message}）`, 1, 'E_ASOF_SNAPSHOT_INVALID');
+  }
+}
+
+/**
+ * 回溯（as-of）运行时解析「A 基准池」。
+ *
+ * 判定顺序（全部由脚本判定，编排者不手工挑文件）：
+ *   1. `--pool <显式文件>`           → 显式指定
+ *   2. `历史/` 中日期 ≤ D 的最新日期，同日取最早一份 → 主池历史备份（= D 当天开始前的池状态）
+ *   3. `历史回溯/` 中 asof 日期 < D 的最新一份       → as-of 快照（上次回溯产物）
+ *   4. 均无                            → 空池（A 为空）+ W_ASOF_NO_SNAPSHOT
+ */
+function cmdAsofPool(args) {
+  const poolDir = requireArg(args, 'pool-dir');
+  const date = requireArg(args, 'date');
+  if (!DATE_RE.test(date)) throw new CliError('--date 必须是 YYYY-MM-DD', 2, 'E_ASOF_DATE');
+  const today = todayLocal();
+  if (date > today) throw new CliError(`--date 不能晚于今天（${date} > ${today}）；未来日期请用常规运行`, 1, 'E_ASOF_FUTURE');
+
+  const explicit = typeof args.pool === 'string' && args.pool !== '' && args.pool !== '-' ? args.pool : undefined;
+  const poolFile = path.join(poolDir, '当前选股池.csv');
+  const backupDir = path.join(poolDir, '历史');
+  const asofDir = path.join(poolDir, '历史回溯');
+  const warnings = [];
+  const fallbackChain = [];
+
+  if (date === today) warnings.push('W_ASOF_SAME_DAY：锚定日期即今天，应按常规一次性运行处理，不写 as-of 快照');
+
+  let source = '空池';
+  let selected = null;
+
+  if (explicit !== undefined) {
+    if (!fs.existsSync(explicit)) throw new CliError(`--pool 指定的文件不存在：${explicit}`, 1, 'E_ASOF_SNAPSHOT_INVALID');
+    inspectSnapshot(explicit);
+    selected = explicit;
+    source = '显式指定';
+    fallbackChain.push({ 候选: '显式指定', 判定: '命中', 文件: explicit, 说明: '由 --pool 显式给出，跳过自动判定' });
+  } else {
+    const backups = listPoolBackups(backupDir);
+    const eligible = backups.filter((item) => item.date <= date);
+    if (eligible.length > 0) {
+      const maxDate = eligible.map((item) => item.date).sort().at(-1);
+      const sameDay = eligible.filter((item) => item.date === maxDate);
+      selected = sameDay[0].file; // listPoolBackups 已按 stamp 升序 → [0] 即同日最早
+      source = '主池历史备份';
+      fallbackChain.push({
+        候选: '主池历史备份',
+        判定: '命中',
+        文件: selected,
+        说明: `日期 ≤ ${date} 的最新日期 ${maxDate}，同日取最早一份（= ${date} 当天开始前的池状态）`,
+      });
+    } else {
+      fallbackChain.push({
+        候选: '主池历史备份',
+        判定: '未命中',
+        目录: backupDir,
+        说明: backups.length > 0 ? `${backups.length} 份备份均晚于锚定日期` : '无历史备份',
+      });
+    }
+  }
+
+  if (selected === null) {
+    const asofs = listPoolAsof(asofDir);
+    const eligible = asofs.filter((item) => item.date < date); // 严格早于 D：排除 D 自身的回溯产物
+    if (eligible.length > 0) {
+      selected = eligible.at(-1).file; // 已按日期升序
+      source = 'as-of快照';
+      fallbackChain.push({
+        候选: 'as-of快照',
+        判定: '命中',
+        文件: selected,
+        说明: `取 asof 日期 < ${date} 的最新一份（上一次回溯的产出）`,
+      });
+    } else {
+      fallbackChain.push({
+        候选: 'as-of快照',
+        判定: '未命中',
+        目录: asofDir,
+        说明: asofs.length > 0 ? `${asofs.length} 份快照均不早于锚定日期` : '无 as-of 快照',
+      });
+    }
+  }
+
+  let inspect = { 方向数: 0, 行数: 0 };
+  if (selected !== null) {
+    inspect = inspectSnapshot(selected);
+  } else {
+    fallbackChain.push({ 候选: '空池', 判定: '无候选', 说明: '无显式指定 / 历史备份 / as-of 快照 → A 为空池' });
+    warnings.push('W_ASOF_NO_SNAPSHOT：未找到可用基准池，按空池（A 为空）继续');
+  }
+
+  const result = {
+    meta: {
+      generated_at: new Date().toISOString(),
+      技能: 'santi-daily-pool-refresh',
+      技能版本: VERSION,
+      池目录: poolDir,
+      锚定日期: date,
+      执行时刻: new Date().toISOString(),
+    },
+    锚定日期: date,
+    来源: source,
+    A基准池: selected ?? '-',
+    选定文件: selected,
+    回退链: fallbackChain,
+    A方向数: inspect.方向数,
+    A行数: inspect.行数,
+    主池文件: poolFile,
+    主池未被改动: true,
+    数据一致性: {
+      新闻窗口: `${date} 当天执行时刻往前 24 小时（Asia/Shanghai）`,
+      行情与市场规模: '执行时刻实时数据；子技能的 --run-date 只改 generated_at/run_date 与产物文件名',
+      声明: '回溯是「以该日新闻 + 当执行时刻行情口径」的重放，不是严格 point-in-time 复现',
+      警告码: 'W_BACKFILL_DATA_MIXED',
+    },
+    warnings,
+  };
+
+  if (typeof args.out === 'string' && args.out !== '') writeFileAtomic(args.out, `${JSON.stringify(result, null, 2)}\n`);
+
+  process.stdout.write(
+    `asof-pool：锚定 ${date} → 来源 ${source}\n` +
+      `A 基准池：${result.A基准池}（${inspect.方向数} 个方向 / ${inspect.行数} 行）\n` +
+      `主池未被改动：${poolFile}\n` +
+      `判定链：\n  ${fallbackChain.map((item) => `${item.候选} → ${item.判定}（${item.说明}）`).join('\n  ')}\n` +
+      (warnings.length > 0 ? `警告：\n  ${warnings.join('\n  ')}\n` : ''),
+  );
+  if (typeof args.out === 'string' && args.out !== '') process.stdout.write(`写入 ${args.out}\n`);
+  return 0;
+}
+
 // ---------------------------------------------------------------- merge-pool
 
 /**
@@ -598,10 +785,18 @@ function cmdMergePool(args) {
   const poolPath = requireArg(args, 'pool');
   const outPath = requireArg(args, 'out');
   const rankPath = requireArg(args, 'rank');
+  // 写回目标默认 = 读取基准（默认模式行为与旧版完全一致）；
+  // 回溯轮用 --pool-out 把结果写到运行目录 / 历史回溯/，从而永不动主池。
+  const poolOutPath = typeof args['pool-out'] === 'string' && args['pool-out'] !== '' ? args['pool-out'] : poolPath;
+  if (poolPath === '-' && poolOutPath === '-') {
+    throw new CliError('--pool - 表示空池基准，必须同时用 --pool-out 指定写回目标', 2, 'E_USAGE');
+  }
+  const noBackup = args['no-backup'] === true;
+  const dryRun = args['dry-run'] === true;
   const maxDirections = args['max-directions'] === undefined ? DEFAULT_MAX_DIRECTIONS : Number(args['max-directions']);
   if (!Number.isInteger(maxDirections) || maxDirections < 1) throw new CliError('--max-directions 必须是 >=1 的整数', 2);
 
-  const pool = readPool(poolPath);
+  const pool = poolPath === '-' ? { header: [...POOL_HEADER], rows: [], exists: false } : readPool(poolPath);
   const rankJson = readJson(rankPath);
   const { order, meta } = extractDirectionOrder(rankJson);
   if (order.length === 0) throw new CliError('rank 文件中没有任何可取的方向（全部未通过？）', 1);
@@ -631,6 +826,8 @@ function cmdMergePool(args) {
     技能版本: VERSION,
     选股池文件: poolPath,
     选股池存在: pool.exists,
+    读取基准: poolPath === '-' ? '(空池基准)' : poolPath,
+    写回目标: poolOutPath,
     排名文件: rankPath,
     排名来源: meta,
     方向数上限: maxDirections,
@@ -645,18 +842,19 @@ function cmdMergePool(args) {
     归档行数: result.droppedRows.length,
     新增入池文件: newMeta,
     输出: outPath,
-    dry_run: args['dry-run'] === true,
+    dry_run: dryRun,
   };
 
-  if (args['dry-run'] !== true) {
-    if (pool.exists) {
-      const backupDir = typeof args['backup-dir'] === 'string' ? args['backup-dir'] : path.join(path.dirname(poolPath), '历史');
+  if (!dryRun) {
+    // 备份对象 = 写回目标（回溯轮默认 --no-backup：as-of 快照不需要"写前备份"）
+    if (!noBackup && fs.existsSync(poolOutPath)) {
+      const backupDir = typeof args['backup-dir'] === 'string' ? args['backup-dir'] : path.join(path.dirname(poolOutPath), '历史');
       ensureDir(backupDir);
-      const backupFile = path.join(backupDir, `${path.basename(poolPath, '.csv')}_${nowStamp()}.csv`);
-      fs.copyFileSync(poolPath, backupFile);
+      const backupFile = path.join(backupDir, `${path.basename(poolOutPath, '.csv')}_${nowStamp()}.csv`);
+      fs.copyFileSync(poolOutPath, backupFile);
       report.备份 = backupFile;
     }
-    writeFileAtomic(poolPath, outText);
+    writeFileAtomic(poolOutPath, outText);
     writeFileAtomic(outPath, outText);
     if (typeof args.archive === 'string' && args.archive !== '') writeFileAtomic(args.archive, archiveText);
   }
@@ -665,7 +863,8 @@ function cmdMergePool(args) {
   process.stdout.write(
     `merge-pool ${report.dry_run ? '(dry-run) ' : ''}完成：合并前 ${result.beforeDirections.length} 个方向 → 合并后 ${result.afterDirections.length} 个方向\n` +
       `保留 ${result.keptRows.length} 行 / 剔除 ${result.droppedDetail.length} 个方向（归档 ${result.droppedRows.length} 行）/ 去重 ${result.deduped} 行\n` +
-      `${report.dry_run ? '未写盘（dry-run）' : `写回 ${poolPath}\n另存 ${outPath}`}\n`,
+      `${report.dry_run ? '未写盘（dry-run）' : `写回 ${poolOutPath}\n另存 ${outPath}`}\n` +
+      `读取基准：${report.读取基准}${report.备份 ? `\n写前备份：${report.备份}` : ''}\n`,
   );
   if (result.droppedDetail.length > 0) {
     process.stdout.write(`被剔除方向:\n  ${result.droppedDetail.map((d) => `${d.细分产业方向}（${d.原因}）`).join('\n  ')}\n`);
@@ -819,6 +1018,26 @@ function cmdAudit(args) {
     }
   }
 
+  // 回溯（as-of）轮次：Step 0.6 写的 回溯锚定.json 升格进运行清单，供事后追溯"池为什么没被改"
+  const asofFile = path.join(runDir, '回溯锚定.json');
+  let asof = null;
+  if (fs.existsSync(asofFile)) {
+    try {
+      const doc = readJson(asofFile);
+      asof = {
+        锚定日期: doc['锚定日期'] ?? doc?.meta?.['锚定日期'] ?? null,
+        来源: doc['来源'] ?? null,
+        A基准池: doc['A基准池'] ?? null,
+        选定文件: doc['选定文件'] ?? null,
+        主池未被改动: doc['主池未被改动'] ?? null,
+        数据一致性: doc['数据一致性'] ?? null,
+        warnings: Array.isArray(doc.warnings) ? doc.warnings : [],
+      };
+    } catch (error) {
+      warnings.push(`回溯锚定.json 解析失败：${error.message}`);
+    }
+  }
+
   const report = {
     generated_at: new Date().toISOString(),
     技能: 'santi-daily-pool-refresh',
@@ -830,6 +1049,7 @@ function cmdAudit(args) {
     A_选股池已有: manifest?.A_选股池已有 ?? null,
     B_利好候选: manifest?.B_利好候选 ?? null,
     C_重大利空: manifest?.C_重大利空 ?? null,
+    回溯: asof,
     warnings,
     降级说明: degradations,
   };
@@ -837,6 +1057,7 @@ function cmdAudit(args) {
   process.stdout.write(`audit：${steps.filter((s) => s.状态 === '缺失').length} 个必需步骤缺失，${warnings.length} 条警告\n`);
   for (const step of steps) process.stdout.write(`  ${step.状态.padEnd(6, ' ')} ${step.目录}（${step.文件.length} 个文件）\n`);
   process.stdout.write(`  选股池：${pool.exists ? `存在，${pool.rows} 行 / ${pool.directions.length} 个方向` : '不存在'}\n`);
+  if (asof !== null) process.stdout.write(`  回溯：锚定 ${asof.锚定日期}，A 来源 ${asof.来源}，主池未被改动\n`);
 
   if (args.write === true) {
     const out = path.join(runDir, '运行清单.json');
@@ -848,7 +1069,12 @@ function cmdAudit(args) {
         previous = {};
       }
     }
-    const merged = { ...previous, ...report, 调度: previous['调度'] ?? null };
+    const merged = {
+      ...previous,
+      ...report,
+      调度: previous['调度'] ?? null,
+      回溯: asof ?? previous['回溯'] ?? null,
+    };
     writeFileAtomic(out, `${JSON.stringify(merged, null, 2)}\n`);
     process.stdout.write(`运行清单已写入 ${out}\n`);
   }
@@ -1315,6 +1541,192 @@ function testScheduleRendering() {
   assert(!text.includes('绝对路径'), '无占位残留');
 }
 
+function testAsofPool() {
+  withTempDir((dir) => {
+    const poolDir = path.join(dir, '当前选股池');
+    const backupDir = path.join(poolDir, '历史');
+    const asofDir = path.join(poolDir, '历史回溯');
+    ensureDir(backupDir);
+    ensureDir(asofDir);
+    const seed = (file, direction) =>
+      fs.writeFileSync(
+        file,
+        renderCsv(POOL_HEADER, [pickRow({ 细分产业方向: direction, 产业链层级: '下游应用', 股票代码: '600001.SH', 股票名称: '种子', 流通市值: '100.00 亿元', 推荐层级: '核心受益', 层级解读: 'seed' })]),
+        'utf8',
+      );
+    seed(path.join(backupDir, '当前选股池_2026-10-05-08-30.csv'), '五号方向');
+    seed(path.join(backupDir, '当前选股池_2026-10-08-08-30.csv'), '八号早');
+    seed(path.join(backupDir, '当前选股池_2026-10-08-14-00.csv'), '八号晚');
+    seed(path.join(backupDir, '当前选股池_2026-10-12-08-30.csv'), '十二号');
+    seed(path.join(asofDir, '当前选股池_asof-2026-10-01.csv'), '回溯一号');
+    seed(path.join(asofDir, '当前选股池_asof-2026-10-04.csv'), '回溯四号');
+    fs.writeFileSync(path.join(backupDir, 'README.txt'), '不是快照，应被忽略', 'utf8');
+
+    const out = path.join(dir, '回溯锚定.json');
+    const run = (extra) => {
+      const code = cmdAsofPool({ 'pool-dir': poolDir, out, _: [], ...extra });
+      assertEqual(code, 0, `asof-pool 退出码（${extra.date ?? ''}）`);
+      return readJson(out);
+    };
+
+    // a) D 当天有多份备份 → 取同日最早一份（= D 当天开始前的池状态）
+    let doc = run({ date: '2026-10-08' });
+    assertEqual(path.basename(doc.选定文件), '当前选股池_2026-10-08-08-30.csv', '同日多份取最早');
+    assertEqual(doc.来源, '主池历史备份', '来源为主池历史备份');
+    assertEqual(doc.A方向数, 1, 'A 方向数');
+    assertEqual(doc.主池未被改动, true, '声明主池未被改动');
+    assert(doc.回退链.some((item) => item.候选 === '主池历史备份' && item.判定 === '命中'), '回退链记录命中');
+
+    // b) D 当天无备份 → 取 ≤D 的最新日期
+    doc = run({ date: '2026-10-09' });
+    assertEqual(path.basename(doc.选定文件), '当前选股池_2026-10-08-08-30.csv', '取日期 ≤ D 的最新备份');
+
+    // c) 早于全部备份 → 回退 as-of 快照，且严格早于 D（排除 D 自身的回溯产物）
+    doc = run({ date: '2026-10-02' });
+    assertEqual(doc.来源, 'as-of快照', '回退到 as-of 快照');
+    assertEqual(path.basename(doc.选定文件), '当前选股池_asof-2026-10-01.csv', '排除锚定日自身的回溯产物');
+
+    // d) --pool 显式指定优先级最高
+    const explicit = path.join(dir, '显式基准.csv');
+    seed(explicit, '显式方向');
+    doc = run({ date: '2026-10-08', pool: explicit });
+    assertEqual(doc.来源, '显式指定', '显式指定优先级最高');
+    assertEqual(doc.A基准池, explicit, 'A 基准池为显式文件');
+
+    // e) 无任何候选 → 空池 + W_ASOF_NO_SNAPSHOT
+    const emptyPoolDir = path.join(dir, '空池目录');
+    ensureDir(emptyPoolDir);
+    const code = cmdAsofPool({ 'pool-dir': emptyPoolDir, date: '2026-10-08', out, _: [] });
+    assertEqual(code, 0, '空池回退不报错');
+    doc = readJson(out);
+    assertEqual(doc.来源, '空池', '无候选按空池');
+    assertEqual(doc.A基准池, '-', '空池基准为 -');
+    assert(doc.warnings.some((line) => line.startsWith('W_ASOF_NO_SNAPSHOT')), '空池警告码');
+
+    // f) D == 今天 → 警告按常规运行处理
+    doc = run({ date: todayLocal() });
+    assert(doc.warnings.some((line) => line.startsWith('W_ASOF_SAME_DAY')), '今日锚定警告');
+
+    // g) 未来日期 → 业务错误 1；格式错 → 用法错误 2；快照损坏 → 业务错误 1
+    const expectCode = (fn, code, name) => {
+      try {
+        fn();
+        throw new Error(`${name}：未抛出错误`);
+      } catch (error) {
+        if (error instanceof CliError && error.code === code) return error;
+        throw error;
+      }
+    };
+    const future = expectCode(() => cmdAsofPool({ 'pool-dir': poolDir, date: '2999-01-01', _: [] }), 1, '未来日期');
+    assertEqual(future.label, 'E_ASOF_FUTURE', '未来日期错误码');
+    const badFormat = expectCode(() => cmdAsofPool({ 'pool-dir': poolDir, date: '2026/10/08', _: [] }), 2, '日期格式');
+    assertEqual(badFormat.label, 'E_ASOF_DATE', '日期格式错误码');
+    const broken = path.join(backupDir, '当前选股池_2026-10-06-08-30.csv');
+    fs.writeFileSync(broken, '列A,列B\n1,2\n', 'utf8');
+    const bad = expectCode(() => cmdAsofPool({ 'pool-dir': poolDir, date: '2026-10-07', _: [] }), 1, '快照损坏');
+    assertEqual(bad.label, 'E_ASOF_SNAPSHOT_INVALID', '快照损坏错误码');
+  });
+}
+
+function testMergePoolPoolOut() {
+  withTempDir((dir) => {
+    const liveDir = path.join(dir, '当前选股池');
+    ensureDir(liveDir);
+    const livePool = path.join(liveDir, '当前选股池.csv');
+    fs.writeFileSync(
+      livePool,
+      renderCsv(POOL_HEADER, [pickRow({ 细分产业方向: '主池方向', 产业链层级: '下游应用', 股票代码: '600001.SH', 股票名称: '主池一', 流通市值: '100.00 亿元', 推荐层级: '核心受益', 层级解读: '主池记录' })]),
+      'utf8',
+    );
+    const snapshot = path.join(dir, '快照.csv');
+    fs.writeFileSync(
+      snapshot,
+      renderCsv(POOL_HEADER, [pickRow({ 细分产业方向: '快照方向', 产业链层级: '中游制造/集成', 股票代码: '600002.SH', 股票名称: '快照一', 流通市值: '200.00 亿元', 推荐层级: '次要受益', 层级解读: '快照记录' })]),
+      'utf8',
+    );
+    const rankFile = path.join(dir, 'santi-3-输出.json');
+    fs.writeFileSync(
+      rankFile,
+      JSON.stringify({ 细分方向: [{ 排名: 1, 细分产业方向: '快照方向', 结论: '通过' }, { 排名: 2, 细分产业方向: '新方向', 结论: '通过' }] }),
+      'utf8',
+    );
+    const newFile = path.join(dir, '入池明细.csv');
+    fs.writeFileSync(
+      newFile,
+      renderCsv(POOL_HEADER, [pickRow({ 细分产业方向: '新方向', 产业链层级: '下游应用', 股票代码: '300001.SZ', 股票名称: '新一', 流通市值: '50.1', 推荐层级: '核心受益', 层级解读: '新记录' })]),
+      'utf8',
+    );
+
+    const liveBefore = readUtf8(livePool);
+    const snapshotBefore = readUtf8(snapshot);
+    const asofOut = path.join(dir, '历史回溯', '当前选股池_asof-2026-10-08.csv');
+    const runOut = path.join(dir, 'run', '选股池-合并后.csv');
+    const archive = path.join(dir, 'run', '选股池-归档.csv');
+    const report = path.join(dir, 'run', '合并报告.json');
+
+    const code = cmdMergePool({
+      pool: snapshot, new: newFile, rank: rankFile, out: runOut, 'pool-out': asofOut,
+      'no-backup': true, archive, report, _: [],
+    });
+    assertEqual(code, 0, '隔离写回退出码');
+    assertEqual(readUtf8(livePool), liveBefore, '主池零改动');
+    assertEqual(readUtf8(snapshot), snapshotBefore, '读取基准零改动');
+    assert(fs.existsSync(asofOut), 'as-of 写回目标已生成');
+    assertEqual(readUtf8(asofOut), readUtf8(runOut), '写回目标与另存内容一致');
+    assert(!fs.existsSync(path.join(dir, '历史')), '未在读取基准旁新建备份目录');
+    const doc = readJson(report);
+    assertEqual(doc.写回目标, asofOut, '报告记录写回目标');
+    assertEqual(doc.读取基准, snapshot, '报告记录读取基准');
+    assertEqual(doc.备份, undefined, '--no-backup 不产生备份');
+
+    // 重跑同一锚定日期：写回目标已存在，--no-backup 仍不备份
+    cmdMergePool({ pool: snapshot, new: newFile, rank: rankFile, out: runOut, 'pool-out': asofOut, 'no-backup': true, _: [] });
+    assert(!fs.existsSync(path.join(dir, '历史回溯', '历史')), '--no-backup 对已存在的写回目标也不备份');
+
+    // 空池基准：--pool - 必须同时给 --pool-out
+    let thrown = null;
+    try {
+      cmdMergePool({ pool: '-', rank: rankFile, out: runOut, _: [] });
+    } catch (error) {
+      thrown = error;
+    }
+    assert(thrown instanceof CliError && thrown.code === 2, '--pool - 缺 --pool-out 报用法错误');
+    const emptyOut = path.join(dir, 'run', '空基准.csv');
+    assertEqual(cmdMergePool({ pool: '-', rank: rankFile, out: emptyOut, 'pool-out': emptyOut, _: [] }), 0, '空池基准可合并');
+    assertEqual(parseCsv(readUtf8(emptyOut)).rows.length, 0, '空池基准 + 无新增 → 0 行');
+  });
+}
+
+function testAuditAsof() {
+  withTempDir((dir) => {
+    const root = path.join(dir, 'root');
+    cmdScaffold({ root, timestamp: '2026-10-08-回溯-09-30', _: [] });
+    const runDir = path.join(root, '生产环境', '每日运行记录', '2026-10-08-回溯-09-30-运行记录');
+    assert(fs.existsSync(runDir), '回溯运行目录按 <D>-回溯-<HH>-<MM> 命名');
+    fs.writeFileSync(
+      path.join(runDir, '回溯锚定.json'),
+      JSON.stringify({
+        锚定日期: '2026-10-08',
+        来源: '主池历史备份',
+        A基准池: '/tmp/基准.csv',
+        选定文件: '/tmp/基准.csv',
+        主池未被改动: true,
+        数据一致性: { 声明: '重放，不是严格 point-in-time 复现' },
+        warnings: ['W_BACKFILL_DATA_MIXED'],
+      }),
+      'utf8',
+    );
+    const code = cmdAudit({ 'run-dir': runDir, root, write: true, _: [] });
+    assertEqual(code, 1, '回溯轮缺下游产物时仍退出 1');
+    let manifest = readJson(path.join(runDir, '运行清单.json'));
+    assertEqual(manifest.回溯.锚定日期, '2026-10-08', '运行清单记录回溯锚定日期');
+    assertEqual(manifest.回溯.来源, '主池历史备份', '运行清单记录回溯来源');
+    cmdAudit({ 'run-dir': runDir, root, write: true, _: [] });
+    manifest = readJson(path.join(runDir, '运行清单.json'));
+    assertEqual(manifest.回溯.锚定日期, '2026-10-08', '重复 audit 不丢回溯段');
+  });
+}
+
 function runSelftest() {
   check('CSV 解析容错（BOM/CRLF/引号/空行）', testCsvParsing);
   check('CSV 渲染与回读', testCsvRoundTrip);
@@ -1325,6 +1737,9 @@ function runSelftest() {
   check('merge-pool 端到端（写回/归档/备份/dry-run）', testMergePoolCli);
   check('audit 五步产物与运行清单', testAudit);
   check('调度模板渲染', testScheduleRendering);
+  check('asof-pool 基准池解析（历史备份/as-of/空池/显式/错误码）', testAsofPool);
+  check('merge-pool 隔离写回（--pool-out/--no-backup/空基准）', testMergePoolPoolOut);
+  check('audit 回溯段透传（回溯锚定.json → 运行清单.回溯）', testAuditAsof);
   check('用法与坏输入拦截', testCliErrors);
 
   const failed = testResults.filter((r) => !r.ok);
@@ -1342,6 +1757,7 @@ const COMMANDS = {
   audit: cmdAudit,
   'merge-pool': cmdMergePool,
   manifest: cmdManifest,
+  'asof-pool': cmdAsofPool,
   schedule: cmdSchedule,
   selftest: () => runSelftest(),
   version: () => {
@@ -1381,7 +1797,8 @@ if (isDirectRun) {
     process.exitCode = main(process.argv.slice(2));
   } catch (error) {
     if (error instanceof CliError) {
-      process.stderr.write(`[${error.code === 2 ? 'E_USAGE' : 'E_FAIL'}] ${error.message}\n`);
+      const label = error.label ?? (error.code === 2 ? 'E_USAGE' : 'E_FAIL');
+      process.stderr.write(`[${label}] ${error.message}\n`);
       process.exitCode = error.code;
     } else {
       process.stderr.write(`[E_UNEXPECTED] ${error.stack ?? error.message}\n`);
@@ -1391,4 +1808,4 @@ if (isDirectRun) {
 }
 
 // 供 selftest / 其它脚本导入使用
-export { parseCsv, renderCsv, readPool, rowToObject, pickRow, extractDirectionOrder, mergePool, buildManifest, computeBullishAndBearish, normalizeMcap, normName, POOL_HEADER };
+export { parseCsv, renderCsv, readPool, rowToObject, pickRow, extractDirectionOrder, mergePool, buildManifest, computeBullishAndBearish, normalizeMcap, normName, todayLocal, listPoolBackups, listPoolAsof, POOL_HEADER };
